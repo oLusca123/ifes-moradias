@@ -5,7 +5,7 @@ import { Moradia } from "../models/Moradia";
 import { Usuario } from "../models/Usuario";
 
 export const BancoDeDados = new DataSource({
-    type: "sqlite",
+    type: "better-sqlite3",
     database: "database.sqlite",
 
     synchronize: true,
