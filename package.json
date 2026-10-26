@@ -3,11 +3,11 @@
   "name": "tp_modelo",
   "version": "1.0.0",
   "main": "dist/index.js",
-"scripts": {
-  "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
-  "build": "tsc && xcopy src\\views dist\\views /E /I /Y",
-  "start": "set NODE_ENV=production&& node dist/index.js"
-},
+  "scripts": {
+    "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
+    "build": "tsc && xcopy src\\views dist\\views /E /I /Y",
+    "start": "set NODE_ENV=production&& node dist/index.js"
+  },
   "author": "",
   "license": "ISC",
   "description": "",
