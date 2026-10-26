@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title><%= moradia.titulo %> | Moradia IFES</title>
+    <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+    <div class="page-shell">
+        <header class="topbar">
+            <a href="/moradias" class="brand">
+                <img class="brand-logo" src="/logo-moradia-ifes.png" alt="" />
+                <span>Moradia IFES</span>
+            </a>
+
+            <div class="topbar-actions">
+                <a class="btn btn-ghost" href="/moradias">Voltar para resultados</a>
+                <% if (usuario && usuario.nome) { %>
+                    <a class="account-avatar-link" href="/perfil" aria-label="Minha conta: <%= usuario.nome %>" title="Minha conta">
+                        <% if (usuario.foto) { %>
+                            <img src="/perfil/foto" alt="" />
+                        <% } else { %>
+                            <span><%= usuario.nome.charAt(0).toUpperCase() %></span>
+                        <% } %>
+                    </a>
+                    <a class="btn btn-ghost" href="/logout">Sair</a>
+                <% } else { %>
+                    <a class="btn btn-ghost" href="/login">Entrar</a>
+                    <a class="btn btn-primary" href="/cadastro">Cadastrar</a>
+                <% } %>
+            </div>
+        </header>
+
+        <main class="details-page">
+            <section class="detail-card">
+                <% if (moradia.demonstracao) { %>
+                    <div class="demo-detail-badge">Exemplo ilustrativo · dados fictícios</div>
+                <% } %>
+                <div class="detail-gallery">
+                    <img src="<%= moradia.imagem || ('/moradias/' + moradia.id + '/imagem') %>" alt="<%= moradia.titulo %>" />
+                    <div class="thumb-grid">
+                        <img src="<%= moradia.imagem || ('/moradias/' + moradia.id + '/imagem') %>" alt="Detalhe de <%= moradia.titulo %>" />
+                        <div class="gallery-note"><%= moradia.demonstracao ? 'Imagem ilustrativa · anúncio fictício' : 'Imagem do imóvel' %></div>
+                    </div>
+                </div>
+
+                <div class="detail-header">
+                    <div>
+                        <h1><%= moradia.titulo %></h1>
+                        <div class="detail-location">📍 <%= moradia.localizacao || moradia.bairro || 'Santa Teresa' %></div>
+                    </div>
+                    <div class="price-tag">R$ <%= Number(moradia.preco).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) %></div>
+                </div>
+
+                <div class="detail-meta">
+                    <span>📏 <%= moradia.distancia || 'Próximo ao campus' %></span>
+                    <span>🏡 <%= moradia.tipo || 'Casa' %></span>
+                    <span>🛏️ <%= moradia.quartos || 1 %> quarto(s)</span>
+                    <span>🚿 <%= moradia.banheiros || 1 %> banheiro(s)</span>
+                    <span>🚗 <%= moradia.vagas || 0 %> vaga(s)</span>
+                    <span class="status <%= moradia.disponivel ? '' : 'red' %>"><%= moradia.disponivel ? '✔ Disponível' : '✖ Indisponível' %></span>
+                </div>
+
+                <div class="detail-section">
+                    <h2>Descrição</h2>
+                    <p><%= moradia.descricao || 'Imóvel bem localizado e adequado para estudantes e servidores do campus.' %></p>
+                </div>
+
+                <div class="detail-section" style="margin-top: 22px;">
+                    <h2>Comodidades</h2>
+                    <div class="feature-list">
+                        <% const comodidadesLabels = { wifi: '📶 Wi-Fi', mobilia: '🛋️ Mobiliado', cozinha: '🍳 Cozinha equipada', lavanderia: '🧺 Lavanderia', garagem: '🚗 Garagem', quintal: '🌿 Quintal ou varanda', agua_inclusa: '💧 Água inclusa', energia_inclusa: '⚡ Energia inclusa' }; %>
+                        <% (comodidades || []).forEach((comodidade) => { %>
+                            <% if (comodidadesLabels[comodidade]) { %>
+                                <span class="feature"><%= comodidadesLabels[comodidade] %></span>
+                            <% } %>
+                        <% }) %>
+                        <% if (!comodidades || comodidades.length === 0) { %>
+                            <span class="feature">O proprietário ainda não informou comodidades.</span>
+                        <% } %>
+                    </div>
+                </div>
+            </section>
+
+            <aside class="sidebar">
+                <section class="side-box">
+                    <h3><%= moradia.demonstracao ? 'Contato de demonstração' : 'Contato do proprietário' %></h3>
+                    <% if (moradia.demonstracao) { %>
+                        <p class="demo-contact-note">O telefone abaixo é fictício e serve apenas para demonstrar como funciona o contato no site.</p>
+                    <% } %>
+                    <div class="owner-card">
+                        <div class="avatar">👤</div>
+                        <div class="owner-meta">
+                            <strong>Proprietário do imóvel</strong>
+                            <span>📞 <%= moradia.telefone || 'Contato não informado' %></span>
+                        </div>
+                    </div>
+                    <div style="margin-top: 18px; display:flex; gap:10px; flex-direction: column;">
+                        <% if (moradia.telefone) { %>
+                            <a class="btn btn-primary" href="tel:<%= moradia.telefone.replace(/[^\d+]/g, '') %>">Entrar em contato</a>
+                        <% } %>
+                        <a class="btn btn-secondary" href="/moradias">Voltar para moradias</a>
+                    </div>
+                </section>
+
+                <section class="side-box">
+                    <h3>Ações rápidas</h3>
+                    <div class="info-list">
+                        <a class="info-item" href="/moradias"><span class="info-icon">❤</span> Favoritar</a>
+                        <% if (moradia.telefone) { %>
+                            <a class="info-item" href="tel:<%= moradia.telefone.replace(/[^\d+]/g, '') %>"><span class="info-icon">☎️</span> Entrar em contato</a>
+                        <% } %>
+                        <a class="info-item" href="/moradias/novo"><span class="info-icon">🏷️</span> Anunciar imóvel</a>
+                    </div>
+                </section>
+            </aside>
+        </main>
+    </div>
+</body>
+</html>

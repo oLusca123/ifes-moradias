@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Anunciar imóvel | Moradia IFES</title>
+    <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+    <% const formData = typeof form !== 'undefined' ? form : {}; %>
+    <% const formAmenities = Array.isArray(formData.comodidades) ? formData.comodidades : (formData.comodidades ? [formData.comodidades] : []); %>
+    <div class="page-shell listing-shell">
+        <header class="topbar">
+            <a href="/moradias" class="brand">
+                <img class="brand-logo" src="/logo-moradia-ifes.png" alt="" />
+                <span>Moradia IFES</span>
+            </a>
+            <div class="topbar-actions">
+                <a class="btn btn-ghost" href="/moradias">Voltar à lista</a>
+                <% if (usuario && usuario.nome) { %>
+                    <a class="account-avatar-link" href="/perfil" aria-label="Minha conta: <%= usuario.nome %>" title="Minha conta">
+                        <% if (usuario.foto) { %>
+                            <img src="/perfil/foto" alt="" />
+                        <% } else { %>
+                            <span><%= usuario.nome.charAt(0).toUpperCase() %></span>
+                        <% } %>
+                    </a>
+                    <a class="btn btn-ghost" href="/logout">Sair</a>
+                <% } %>
+            </div>
+        </header>
+
+        <main class="listing-layout">
+            <section class="listing-main">
+                <div class="listing-welcome">
+                    <span class="guide-eyebrow">ANÚNCIO GRATUITO · MORADIA IFES</span>
+                    <h1>Vamos encontrar o próximo morador do seu espaço.</h1>
+                    <p>Conte um pouco sobre o imóvel. Você pode revisar tudo antes de publicar.</p>
+                </div>
+
+                <ol class="listing-progress" aria-label="Etapas do anúncio">
+                    <li class="listing-progress-step active" data-progress-step="0">
+                        <span>1</span><small>Sobre o imóvel</small>
+                    </li>
+                    <li class="listing-progress-step" data-progress-step="1">
+                        <span>2</span><small>Localização</small>
+                    </li>
+                    <li class="listing-progress-step" data-progress-step="2">
+                        <span>3</span><small>Comodidades</small>
+                    </li>
+                    <li class="listing-progress-step" data-progress-step="3">
+                        <span>4</span><small>Preço e contato</small>
+                    </li>
+                </ol>
+
+                <% if (erro) { %>
+                    <div class="listing-error" role="alert"><span aria-hidden="true">!</span><%= erro %></div>
+                <% } %>
+
+                <form class="listing-form" action="/moradias/novo" method="POST" enctype="multipart/form-data" id="listing-form">
+                    <section class="listing-step active" data-step="0" aria-labelledby="step-title-0">
+                        <div class="listing-step-heading">
+                            <span class="step-kicker">ETAPA 1 DE 4</span>
+                            <h2 id="step-title-0">Comece pelas fotos e pelo tipo de espaço</h2>
+                            <p>Uma boa foto ajuda quem está procurando a imaginar a vida por aí.</p>
+                        </div>
+
+                        <div class="listing-photo-field">
+                            <label for="imagem">Foto principal do imóvel <span class="required-mark">*</span></label>
+                            <input id="imagem" name="imagem" type="file" accept="image/jpeg,image/png,image/webp" hidden />
+                            <div class="photo-dropzone" id="photo-dropzone" role="button" tabindex="0" aria-label="Escolher foto do imóvel">
+                                <div class="photo-placeholder" id="photo-placeholder">
+                                    <span class="photo-upload-icon" aria-hidden="true">↑</span>
+                                    <strong>Arraste uma foto para cá ou <span>escolha um arquivo</span></strong>
+                                    <small>JPG, PNG ou WebP · até 5 MB</small>
+                                </div>
+                                <img class="photo-preview" id="photo-preview" alt="Prévia da foto selecionada" hidden />
+                                <button class="photo-remove" type="button" id="photo-remove" aria-label="Remover foto" hidden>×</button>
+                            </div>
+                            <small class="field-hint" id="photo-hint">A imagem fica armazenada no banco de dados do site.</small>
+                        </div>
+
+                        <div class="field">
+                            <label>Que tipo de espaço você está anunciando? <span class="required-mark">*</span></label>
+                            <div class="property-type-options" role="radiogroup" aria-label="Tipo do imóvel">
+                                <% const tiposImovel = [{ valor: 'Casa', icone: '⌂', texto: 'Casa' }, { valor: 'Apartamento', icone: '▤', texto: 'Apartamento' }, { valor: 'Kitnet', icone: '▣', texto: 'Kitnet' }, { valor: 'Quarto', icone: '▢', texto: 'Quarto' }]; %>
+                                <% tiposImovel.forEach((opcao, index) => { %>
+                                    <label class="property-type-card <%= formData.tipo === opcao.valor || (!formData.tipo && opcao.valor === 'Casa') ? 'selected' : '' %>">
+                                        <input type="radio" name="tipo" value="<%= opcao.valor %>" <%= index === 0 ? 'required' : '' %> <%= formData.tipo === opcao.valor || (!formData.tipo && opcao.valor === 'Casa') ? 'checked' : '' %> />
+                                        <span class="property-type-icon" aria-hidden="true"><%= opcao.icone %></span>
+                                        <strong><%= opcao.texto %></strong>
+                                    </label>
+                                <% }) %>
+                            </div>
+                        </div>
+
+                        <div class="field">
+                            <label for="titulo">Dê um nome ao anúncio <span class="required-mark">*</span></label>
+                            <input id="titulo" name="titulo" type="text" maxlength="70" placeholder="Ex.: Casa aconchegante perto do campus" value="<%= formData.titulo || '' %>" required />
+                            <small class="field-hint">Um título claro faz seu anúncio se destacar.</small>
+                        </div>
+                    </section>
+
+                    <section class="listing-step" data-step="1" aria-labelledby="step-title-1">
+                        <div class="listing-step-heading">
+                            <span class="step-kicker">ETAPA 2 DE 4</span>
+                            <h2 id="step-title-1">Onde fica esse cantinho?</h2>
+                            <p>Ajude estudantes a entender a região e planejar o trajeto até o IFES.</p>
+                        </div>
+
+                        <div class="form-grid">
+                            <div class="field">
+                                <label for="bairro">Região ou distrito <span class="required-mark">*</span></label>
+                                <select id="bairro" name="bairro" required>
+                                    <option value="">Selecione a região</option>
+                                    <% ['Santa Teresa', 'Barracão', 'São João de Petrópolis', 'Patrimônio', 'São Roque', 'Outra localidade'].forEach((regiao) => { %>
+                                        <option value="<%= regiao %>" <%= formData.bairro === regiao ? 'selected' : '' %>><%= regiao %></option>
+                                    <% }) %>
+                                </select>
+                            </div>
+                            <div class="field">
+                                <label for="distancia">Distância do campus</label>
+                                <input id="distancia" name="distancia" type="text" maxlength="50" placeholder="Ex.: 10 min a pé" value="<%= formData.distancia || '' %>" />
+                            </div>
+                            <div class="field full">
+                                <label for="localizacao">Endereço ou ponto de referência <span class="required-mark">*</span></label>
+                                <input id="localizacao" name="localizacao" type="text" maxlength="120" placeholder="Rua, bairro ou referência próxima" value="<%= formData.localizacao || '' %>" required />
+                                <small class="field-hint">Não precisa informar o número da casa. Você pode combinar os detalhes diretamente com a pessoa interessada.</small>
+                            </div>
+                        </div>
+
+                        <div class="field">
+                            <label>Como é o espaço?</label>
+                            <div class="counter-grid">
+                                <div class="counter-card">
+                                    <span><strong>Quartos</strong><small>Quantos quartos disponíveis?</small></span>
+                                    <div class="number-stepper">
+                                        <button type="button" data-stepper="quartos" data-change="-1" aria-label="Diminuir quartos">−</button>
+                                        <input id="quartos" name="quartos" type="number" min="1" max="20" value="<%= formData.quartos || 1 %>" />
+                                        <button type="button" data-stepper="quartos" data-change="1" aria-label="Aumentar quartos">+</button>
+                                    </div>
+                                </div>
+                                <div class="counter-card">
+                                    <span><strong>Banheiros</strong><small>Quantos banheiros?</small></span>
+                                    <div class="number-stepper">
+                                        <button type="button" data-stepper="banheiros" data-change="-1" aria-label="Diminuir banheiros">−</button>
+                                        <input id="banheiros" name="banheiros" type="number" min="1" max="20" value="<%= formData.banheiros || 1 %>" />
+                                        <button type="button" data-stepper="banheiros" data-change="1" aria-label="Aumentar banheiros">+</button>
+                                    </div>
+                                </div>
+                                <div class="counter-card">
+                                    <span><strong>Vagas</strong><small>Vagas de garagem</small></span>
+                                    <div class="number-stepper">
+                                        <button type="button" data-stepper="vagas" data-change="-1" aria-label="Diminuir vagas">−</button>
+                                        <input id="vagas" name="vagas" type="number" min="0" max="20" value="<%= formData.vagas || 0 %>" />
+                                        <button type="button" data-stepper="vagas" data-change="1" aria-label="Aumentar vagas">+</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="listing-step" data-step="2" aria-labelledby="step-title-2">
+                        <div class="listing-step-heading">
+                            <span class="step-kicker">ETAPA 3 DE 4</span>
+                            <h2 id="step-title-2">O que torna seu espaço especial?</h2>
+                            <p>Selecione o que está disponível e conte os detalhes importantes.</p>
+                        </div>
+
+                        <fieldset class="amenities-fieldset">
+                            <legend>Comodidades disponíveis</legend>
+                            <div class="amenities-grid">
+                                <% const comodidades = [{ valor: 'wifi', icone: '⌁', texto: 'Wi-Fi' }, { valor: 'mobilia', icone: '▱', texto: 'Mobiliado' }, { valor: 'cozinha', icone: '♨', texto: 'Cozinha equipada' }, { valor: 'lavanderia', icone: '◉', texto: 'Lavanderia' }, { valor: 'garagem', icone: '▣', texto: 'Garagem' }, { valor: 'quintal', icone: '♧', texto: 'Quintal ou varanda' }, { valor: 'agua_inclusa', icone: '◌', texto: 'Água inclusa' }, { valor: 'energia_inclusa', icone: 'ϟ', texto: 'Energia inclusa' }]; %>
+                                <% comodidades.forEach((item) => { %>
+                                    <label class="amenity-option">
+                                        <input type="checkbox" name="comodidades" value="<%= item.valor %>" <%= formAmenities.includes(item.valor) ? 'checked' : '' %> />
+                                        <span class="amenity-icon" aria-hidden="true"><%= item.icone %></span>
+                                        <span><%= item.texto %></span>
+                                        <span class="amenity-check" aria-hidden="true">✓</span>
+                                    </label>
+                                <% }) %>
+                            </div>
+                        </fieldset>
+
+                        <div class="field">
+                            <label for="descricao">Descreva seu imóvel <span class="required-mark">*</span></label>
+                            <textarea id="descricao" name="descricao" maxlength="1000" rows="6" placeholder="Fale sobre o ambiente, a vizinhança, regras da casa e o que mais alguém deveria saber." required><%= formData.descricao || '' %></textarea>
+                            <div class="textarea-footer"><small class="field-hint">Dica: seja transparente sobre o que está incluído no aluguel.</small><small id="description-count">0/1000</small></div>
+                        </div>
+                    </section>
+
+                    <section class="listing-step" data-step="3" aria-labelledby="step-title-3">
+                        <div class="listing-step-heading">
+                            <span class="step-kicker">ETAPA 4 DE 4</span>
+                            <h2 id="step-title-3">Defina o valor e como falar com você</h2>
+                            <p>Quase pronto! Essas informações ajudam a pessoa a dar o próximo passo.</p>
+                        </div>
+
+                        <div class="listing-price-field">
+                            <label for="preco">Qual é o aluguel mensal? <span class="required-mark">*</span></label>
+                            <div class="currency-input"><span>R$</span><input id="preco" name="preco" type="number" min="1" max="100000" step="0.01" placeholder="0,00" value="<%= formData.preco || '' %>" required /></div>
+                            <small class="field-hint">Informe apenas o aluguel. Explique na descrição se há outras despesas.</small>
+                        </div>
+
+                        <div class="field">
+                            <label for="telefone">Telefone ou WhatsApp para contato <span class="required-mark">*</span></label>
+                            <input id="telefone" name="telefone" type="tel" autocomplete="tel" maxlength="20" placeholder="(27) 99999-9999" value="<%= formData.telefone || '' %>" required />
+                        </div>
+
+                        <div class="publish-note">
+                            <span aria-hidden="true">✓</span>
+                            <p>Ao publicar, seu imóvel ficará visível para estudantes e servidores que procuram moradia perto do IFES Campus Santa Teresa.</p>
+                        </div>
+                    </section>
+
+                    <div class="listing-form-footer">
+                        <button class="btn btn-ghost" type="button" id="previous-step" hidden>← Voltar</button>
+                        <span class="listing-save-note">Suas informações só serão publicadas ao finalizar.</span>
+                        <button class="btn btn-primary" type="button" id="next-step">Continuar <span aria-hidden="true">→</span></button>
+                        <button class="btn btn-primary" type="submit" id="publish-listing" hidden>Publicar anúncio <span aria-hidden="true">✓</span></button>
+                    </div>
+                </form>
+            </section>
+
+            <aside class="listing-aside">
+                <section class="listing-preview-card">
+                    <div class="listing-preview-heading">
+                        <span class="guide-eyebrow">PRÉVIA DO ANÚNCIO</span>
+                        <span class="preview-live"><i></i> AO VIVO</span>
+                    </div>
+                    <div class="listing-preview-image">
+                        <img id="preview-card-image" alt="Prévia do imóvel" hidden />
+                        <div id="preview-image-placeholder"><span aria-hidden="true">⌂</span><small>Sua foto aparecerá aqui</small></div>
+                        <span class="preview-photo-count" id="preview-type">Casa</span>
+                    </div>
+                    <div class="listing-preview-body">
+                        <h3 id="preview-title">Nome do seu anúncio</h3>
+                        <p class="preview-location" id="preview-location">📍 Região do imóvel</p>
+                        <p class="preview-price"><strong id="preview-price">R$ 0</strong><span> / mês</span></p>
+                        <div class="preview-property-meta">
+                            <span>🛏️ <b id="preview-rooms">1</b> quarto(s)</span>
+                            <span>🚿 <b id="preview-bathrooms">1</b> banheiro(s)</span>
+                        </div>
+                    </div>
+                </section>
+                <section class="listing-tip-card">
+                    <span aria-hidden="true">✦</span>
+                    <div>
+                        <strong>Um anúncio completo recebe mais interesse</strong>
+                        <p>Inclua uma foto nítida, conte o que está por perto e deixe claro o que já está incluso no valor.</p>
+                    </div>
+                </section>
+                <p class="listing-privacy-note">🔒 Seu endereço completo e telefone serão compartilhados somente com quem acessar os detalhes do anúncio.</p>
+            </aside>
+        </main>
+    </div>
+
+    <script>
+        const form = document.querySelector('#listing-form');
+        const steps = Array.from(document.querySelectorAll('.listing-step'));
+        const progressSteps = Array.from(document.querySelectorAll('.listing-progress-step'));
+        const nextButton = document.querySelector('#next-step');
+        const previousButton = document.querySelector('#previous-step');
+        const publishButton = document.querySelector('#publish-listing');
+        let activeStep = 0;
+
+        function showStep(index) {
+            activeStep = index;
+            steps.forEach((step, stepIndex) => {
+                step.classList.toggle('active', stepIndex === index);
+                step.hidden = stepIndex !== index;
+            });
+            progressSteps.forEach((step, stepIndex) => {
+                step.classList.toggle('active', stepIndex === index);
+                step.classList.toggle('complete', stepIndex < index);
+                if (stepIndex === index) {
+                    step.setAttribute('aria-current', 'step');
+                } else {
+                    step.removeAttribute('aria-current');
+                }
+            });
+            previousButton.hidden = index === 0;
+            nextButton.hidden = index === steps.length - 1;
+            publishButton.hidden = index !== steps.length - 1;
+            document.querySelector('.listing-main').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        function validateCurrentStep() {
+            if (activeStep === 0 && !fileInput.files.length) {
+                document.querySelector('#photo-hint').textContent = 'Escolha uma foto para continuar.';
+                dropzone.focus();
+                return false;
+            }
+            const controls = Array.from(steps[activeStep].querySelectorAll('input, select, textarea'));
+            const invalidControl = controls.find((control) => !control.checkValidity());
+            if (invalidControl) {
+                invalidControl.reportValidity();
+                return false;
+            }
+            return true;
+        }
+
+        nextButton.addEventListener('click', () => {
+            if (validateCurrentStep()) showStep(Math.min(activeStep + 1, steps.length - 1));
+        });
+        previousButton.addEventListener('click', () => showStep(Math.max(activeStep - 1, 0)));
+        form.addEventListener('submit', (event) => {
+            if (!validateCurrentStep()) {
+                event.preventDefault();
+                return;
+            }
+            publishButton.disabled = true;
+            publishButton.textContent = 'Publicando...';
+        });
+
+        document.querySelectorAll('.property-type-card input').forEach((input) => {
+            input.addEventListener('change', () => {
+                document.querySelectorAll('.property-type-card').forEach((card) => card.classList.remove('selected'));
+                input.closest('.property-type-card').classList.add('selected');
+                document.querySelector('#preview-type').textContent = input.value;
+            });
+        });
+
+        document.querySelectorAll('[data-stepper]').forEach((button) => {
+            button.addEventListener('click', () => {
+                const input = document.querySelector(`#${button.dataset.stepper}`);
+                const min = Number(input.min);
+                const max = Number(input.max);
+                input.value = String(Math.max(min, Math.min(max, Number(input.value) + Number(button.dataset.change))));
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+            });
+        });
+
+        const fileInput = document.querySelector('#imagem');
+        const dropzone = document.querySelector('#photo-dropzone');
+        const photoPreview = document.querySelector('#photo-preview');
+        const photoPlaceholder = document.querySelector('#photo-placeholder');
+        const photoRemove = document.querySelector('#photo-remove');
+        let previewObjectUrl = null;
+
+        function showSelectedImage(file) {
+            if (!file) return;
+            const supportedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+            const hint = document.querySelector('#photo-hint');
+            if (!supportedTypes.includes(file.type)) {
+                hint.textContent = 'Formato inválido. Escolha uma imagem JPG, PNG ou WebP.';
+                fileInput.value = '';
+                return;
+            }
+            if (file.size > 5 * 1024 * 1024) {
+                hint.textContent = 'A imagem ultrapassa o limite de 5 MB.';
+                fileInput.value = '';
+                return;
+            }
+            if (previewObjectUrl) URL.revokeObjectURL(previewObjectUrl);
+            previewObjectUrl = URL.createObjectURL(file);
+            photoPreview.src = previewObjectUrl;
+            photoPreview.hidden = false;
+            photoPlaceholder.hidden = true;
+            photoRemove.hidden = false;
+            document.querySelector('#preview-card-image').src = previewObjectUrl;
+            document.querySelector('#preview-card-image').hidden = false;
+            document.querySelector('#preview-image-placeholder').hidden = true;
+            hint.textContent = `${file.name} · ${(file.size / 1024 / 1024).toFixed(2)} MB`;
+        }
+
+        fileInput.addEventListener('change', () => showSelectedImage(fileInput.files[0]));
+        dropzone.addEventListener('click', (event) => {
+            if (event.target !== photoRemove) fileInput.click();
+        });
+        dropzone.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                fileInput.click();
+            }
+        });
+        dropzone.addEventListener('dragover', (event) => {
+            event.preventDefault();
+            dropzone.classList.add('dragging');
+        });
+        dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragging'));
+        dropzone.addEventListener('drop', (event) => {
+            event.preventDefault();
+            dropzone.classList.remove('dragging');
+            const file = event.dataTransfer.files[0];
+            if (file) {
+                const transfer = new DataTransfer();
+                transfer.items.add(file);
+                fileInput.files = transfer.files;
+                showSelectedImage(file);
+            }
+        });
+        photoRemove.addEventListener('click', (event) => {
+            event.stopPropagation();
+            fileInput.value = '';
+            if (previewObjectUrl) URL.revokeObjectURL(previewObjectUrl);
+            previewObjectUrl = null;
+            photoPreview.hidden = true;
+            photoPlaceholder.hidden = false;
+            photoRemove.hidden = true;
+            document.querySelector('#preview-card-image').hidden = true;
+            document.querySelector('#preview-image-placeholder').hidden = false;
+            document.querySelector('#photo-hint').textContent = 'A imagem fica armazenada no banco de dados do site.';
+        });
+
+        const titleInput = document.querySelector('#titulo');
+        const regionInput = document.querySelector('#bairro');
+        const priceInput = document.querySelector('#preco');
+        const descriptionInput = document.querySelector('#descricao');
+
+        titleInput.addEventListener('input', () => {
+            document.querySelector('#preview-title').textContent = titleInput.value.trim() || 'Nome do seu anúncio';
+        });
+        regionInput.addEventListener('change', () => {
+            document.querySelector('#preview-location').textContent = regionInput.value ? `📍 ${regionInput.value}` : '📍 Região do imóvel';
+        });
+        priceInput.addEventListener('input', () => {
+            const value = Number(priceInput.value);
+            document.querySelector('#preview-price').textContent = value > 0
+                ? value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                : 'R$ 0';
+        });
+        descriptionInput.addEventListener('input', () => {
+            document.querySelector('#description-count').textContent = `${descriptionInput.value.length}/1000`;
+        });
+        document.querySelector('.property-type-card input:checked').dispatchEvent(new Event('change'));
+        regionInput.dispatchEvent(new Event('change'));
+        document.querySelector('#quartos').addEventListener('input', (event) => {
+            document.querySelector('#preview-rooms').textContent = event.target.value || '1';
+        });
+        document.querySelector('#banheiros').addEventListener('input', (event) => {
+            document.querySelector('#preview-bathrooms').textContent = event.target.value || '1';
+        });
+        document.querySelector('#quartos').dispatchEvent(new Event('input'));
+        document.querySelector('#banheiros').dispatchEvent(new Event('input'));
+        descriptionInput.dispatchEvent(new Event('input'));
+        titleInput.dispatchEvent(new Event('input'));
+        priceInput.dispatchEvent(new Event('input'));
+        showStep(0);
+    </script>
+</body>
+</html>

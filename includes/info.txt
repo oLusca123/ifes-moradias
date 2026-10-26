@@ -1,0 +1,1 @@
+includes (encluidos) é aonde você vai colocar tudo que não é seu. outros projetos que você colocou, fontes externas e etc.

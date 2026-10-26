@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Moradia IFES</title>
+    <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+    <div class="page-shell">
+        <header class="topbar">
+            <a href="/moradias" class="brand" aria-label="Ir para início">
+                <img class="brand-logo" src="/logo-moradia-ifes.png" alt="" />
+                <span>Moradia IFES</span>
+            </a>
+
+            <form class="topbar-search" action="/moradias" method="GET">
+                <span aria-hidden="true">🔎</span>
+                <input type="search" name="busca" value="<%= busca || '' %>" placeholder="Buscar por moradia, bairro ou tipo..." aria-label="Buscar moradias por nome, bairro ou tipo" />
+                <button class="search-clear" type="button" aria-label="Limpar pesquisa" <% if (!busca) { %>hidden<% } %>>Limpar</button>
+                <button class="search-submit" type="submit" aria-label="Buscar">Buscar</button>
+            </form>
+
+            <div class="topbar-actions">
+                <% if (usuario && usuario.nome) { %>
+                    <a class="account-avatar-link" href="/perfil" aria-label="Minha conta: <%= usuario.nome %>" title="Minha conta">
+                        <% if (usuario.foto) { %>
+                            <img src="/perfil/foto" alt="" />
+                        <% } else { %>
+                            <span><%= usuario.nome.charAt(0).toUpperCase() %></span>
+                        <% } %>
+                    </a>
+                    <a class="btn btn-ghost" href="/logout">Sair</a>
+                <% } else { %>
+                    <a class="btn btn-ghost" href="/login">Entrar</a>
+                    <a class="btn btn-primary" href="/cadastro">Cadastrar</a>
+                <% } %>
+            </div>
+        </header>
+
+        <section class="hero">
+            <div class="hero-inner">
+                <div class="hero-copy">
+                    <span class="hero-eyebrow">MORADIA PERTO DO IFES · SANTA TERESA</span>
+                    <h1>Seu próximo lar começa <span class="accent">perto do campus.</span></h1>
+                    <p>Pesquise opções com valor justo, localização prática e ambiente acolhedor para estudantes e servidores do campus Santa Teresa.</p>
+                    <div class="hero-actions">
+                        <a class="btn btn-primary" href="#moradias">Encontrar moradia <span aria-hidden="true">→</span></a>
+                        <a class="hero-text-link" href="#guia-local">Conhecer a região <span aria-hidden="true">↓</span></a>
+                    </div>
+                </div>
+
+                <div class="hero-aside">
+                    <div class="hero-badges">
+                        <span class="badge">📍 Próximo ao campus</span>
+                        <span class="badge">✅ Imóveis confirmados</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <main class="dashboard">
+            <section class="section-card list-panel" id="moradias">
+                <div class="section-head">
+                    <div>
+                        <span class="guide-eyebrow">ENCONTRE SEU LUGAR</span>
+                        <h2>Moradias para chamar de lar</h2>
+                    </div>
+                    <% if (moradias.length > 0) { %>
+                        <button class="favorites-filter" id="toggle-favorites" type="button" aria-pressed="false">
+                            <span aria-hidden="true">♡</span>
+                            <span>Ver salvos</span>
+                            <span class="favorites-count" id="favorites-count">0</span>
+                        </button>
+                    <% } %>
+                </div>
+
+                <div class="summary-grid">
+                    <div class="metric">
+                        <strong><%= moradias.length %></strong>
+                        <span>moradias encontradas</span>
+                    </div>
+                    <div class="metric">
+                        <strong>4</strong>
+                        <span>localidades próximas</span>
+                    </div>
+                    <div class="metric">
+                        <strong>IFES</strong>
+                        <span>Campus Santa Teresa</span>
+                    </div>
+                </div>
+
+                <div class="city-strip">
+                    <a class="city-pill city-pill-all" href="/moradias" aria-current="<%= busca ? 'false' : 'true' %>">Ver todas as regiões</a>
+                    <a class="city-pill" href="/moradias?busca=<%= encodeURIComponent('Barracão') %>">🏘️ Barracão</a>
+                    <a class="city-pill" href="/moradias?busca=<%= encodeURIComponent('São João de Petrópolis') %>">🌿 São João de Petrópolis</a>
+                    <a class="city-pill" href="/moradias?busca=<%= encodeURIComponent('Santa Teresa') %>">🏡 Santa Teresa</a>
+                    <a class="city-pill" href="/moradias?busca=<%= encodeURIComponent('Patrimônio') %>">📜 Patrimônio</a>
+                    <a class="city-pill" href="/moradias?busca=<%= encodeURIComponent('São Roque') %>">⛰️ São Roque</a>
+                </div>
+
+                <div class="demo-listing-notice">
+                    <span aria-hidden="true">ⓘ</span>
+                    <p>Os anúncios atuais têm o selo <strong>Exemplo ilustrativo</strong>: são dados fictícios para demonstrar o site. Fotos, valores, disponibilidade e contatos também são exemplos.</p>
+                </div>
+
+                <% if (moradias.length === 0) { %>
+                    <div class="empty-state">
+                        Nenhuma moradia encontrada para a busca: <strong><%= busca %></strong>.
+                    </div>
+                <% } else { %>
+                    <div class="property-grid">
+                        <% moradias.forEach((m) => { %>
+                            <article class="property-card" data-property-id="<%= m.id %>">
+                                <div class="property-media">
+                                    <a class="property-image-link" href="/moradias/<%= m.id %>">
+                                        <img src="<%= m.imagem || ('/moradias/' + m.id + '/imagem') %>" alt="<%= m.titulo %>" />
+                                    </a>
+                                    <button class="favorite-pill" type="button" aria-label="Salvar moradia" aria-pressed="false" title="Salvar moradia">♡</button>
+                                    <span class="property-tag <%= m.demonstracao ? 'property-tag-demo' : '' %>"><%= m.demonstracao ? 'Exemplo ilustrativo' : 'Moradia anunciada' %></span>
+                                </div>
+
+                                <a class="property-body" href="/moradias/<%= m.id %>">
+                                    <h3><%= m.titulo %></h3>
+                                    <p class="price">R$ <%= Number(m.preco).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) %><span>/mês</span></p>
+
+                                    <div class="meta">
+                                        <span>📍 <%= m.bairro || 'Santa Teresa' %></span>
+                                        <span>🏡 <%= m.tipo || 'Casa' %></span>
+                                        <span>🛏️ <%= m.quartos || 1 %></span>
+                                        <span>🚗 <%= m.vagas || 0 %> vaga(s)</span>
+                                    </div>
+
+                                    <div class="property-footer">
+                                        <span class="status <%= m.disponivel ? '' : 'red' %>">
+                                            <%= m.disponivel ? '✔ Disponível' : '✖ Indisponível' %>
+                                        </span>
+                                        <span><%= m.distancia || 'Próximo ao campus' %></span>
+                                    </div>
+                                </a>
+                            </article>
+                        <% }) %>
+                    </div>
+                <% } %>
+                <% if (moradias.length > 0) { %>
+                    <div class="empty-state favorites-empty" id="favorites-empty" hidden>
+                        Você ainda não salvou nenhuma moradia. Toque no coração de um imóvel para guardá-lo aqui.
+                    </div>
+                <% } %>
+            </section>
+
+            <aside class="sidebar">
+                <section class="side-box">
+                    <span class="guide-eyebrow">VIDA NA REGIÃO</span>
+                    <h3>Chegue mais preparado</h3>
+                    <p class="guide-intro">Encontre transporte, mercados e farmácias perto de cada localidade. Confirme horários e atendimento antes de sair.</p>
+                    <a class="btn btn-primary guide-main-link" href="#guia-local">Explorar guia local ↓</a>
+                </section>
+
+                <section class="side-box owner-box">
+                    <h3>É proprietário?</h3>
+                    <div class="owner-card">
+                        <div class="avatar">🏠</div>
+                        <div class="owner-meta">
+                            <strong>Anuncie seu imóvel</strong>
+                            <span>Conecte com estudantes e servidores</span>
+                        </div>
+                    </div>
+                    <div style="display:flex; gap: 10px; flex-direction: column; margin-top: 8px;">
+                        <a class="btn btn-primary" href="/moradias/novo">Anunciar</a>
+                    </div>
+                </section>
+            </aside>
+        </main>
+
+        <section class="local-guide" id="guia-local">
+            <div class="guide-heading">
+                <div>
+                    <span class="guide-eyebrow">SEU DIA A DIA, MAIS FÁCIL</span>
+                    <h2>Guia prático da região</h2>
+                    <p>Pesquise lugares no mapa, planeje seu trajeto e confira dicas para alugar com mais segurança.</p>
+                </div>
+                <span class="guide-location-badge">📍 Santa Teresa e localidades próximas</span>
+            </div>
+
+            <div class="guide-region-controls">
+                <span class="guide-filter-label">Região</span>
+                <div class="guide-region-filters" role="group" aria-label="Filtrar por região">
+                    <button class="guide-region-tab active" type="button" data-region="todas" aria-pressed="true">Todas</button>
+                    <button class="guide-region-tab" type="button" data-region="Santa Teresa" aria-pressed="false">Santa Teresa</button>
+                    <button class="guide-region-tab" type="button" data-region="Barracão" aria-pressed="false">Barracão</button>
+                    <button class="guide-region-tab" type="button" data-region="São João de Petrópolis" aria-pressed="false">São João de Petrópolis</button>
+                    <button class="guide-region-tab" type="button" data-region="Patrimônio" aria-pressed="false">Patrimônio</button>
+                    <button class="guide-region-tab" type="button" data-region="São Roque" aria-pressed="false">São Roque</button>
+                </div>
+            </div>
+
+            <div class="guide-tabs" role="group" aria-label="Filtrar informações úteis">
+                <button class="guide-tab active" type="button" data-category="todos" aria-pressed="true">Tudo</button>
+                <button class="guide-tab" type="button" data-category="transporte" aria-pressed="false">🚌 Transporte</button>
+                <button class="guide-tab" type="button" data-category="comercio" aria-pressed="false">🛒 Comércio</button>
+                <button class="guide-tab" type="button" data-category="saude" aria-pressed="false">💊 Saúde</button>
+                <button class="guide-tab" type="button" data-category="campus" aria-pressed="false">🎓 Campus</button>
+                <button class="guide-tab" type="button" data-category="dicas" aria-pressed="false">💡 Dicas</button>
+                <button class="guide-tab" type="button" data-category="seguranca" aria-pressed="false">🚨 Emergência</button>
+            </div>
+
+            <div class="guide-grid">
+                <% informacoesUteis.forEach((item) => {
+                    const regiao = ['Santa Teresa', 'Barracão', 'São João de Petrópolis', 'Patrimônio', 'São Roque'].find((nome) => (item.localidade || '').includes(nome)) || 'Geral';
+                %>
+                    <article class="guide-card" data-category="<%= item.categoria %>" data-region="<%= regiao %>">
+                        <div class="guide-card-top">
+                            <span class="guide-card-icon"><%= item.icone %></span>
+                            <span class="guide-card-category"><%= item.localidade %></span>
+                        </div>
+                        <h3><%= item.titulo %></h3>
+                        <p><%= item.descricao %></p>
+                        <a class="guide-link" href="<%= item.link %>" target="<%= item.link.startsWith('tel:') || item.link.startsWith('#') ? '_self' : '_blank' %>" rel="noopener noreferrer"><%= item.acao %> <span aria-hidden="true">↗</span></a>
+                    </article>
+                <% }) %>
+            </div>
+
+            <div class="rental-checklist" id="checklist-aluguel">
+                <div class="checklist-icon">✅</div>
+                <div>
+                    <h3>Checklist rápido antes de alugar</h3>
+                    <p>Confirme o valor total e as contas incluídas, sinal de internet, acesso à água, segurança das portas e janelas, distância real do campus e opções de transporte nos horários em que você estuda.</p>
+                </div>
+            </div>
+
+            <p class="guide-disclaimer">Os links de mapas e buscas ajudam a encontrar estabelecimentos e horários atualizados, mas as informações podem mudar. Confirme diretamente com o local ou empresa. Barracão é também conhecido como São João de Petrópolis; os nomes acima incluem bairros, distritos e localidades, não apenas municípios.</p>
+        </section>
+    </div>
+    <script>
+        const searchInput = document.querySelector('.topbar-search input[name="busca"]');
+        const clearSearchBtn = document.querySelector('.search-clear');
+
+        if (clearSearchBtn && searchInput) {
+            clearSearchBtn.addEventListener('click', () => {
+                searchInput.value = '';
+                clearSearchBtn.hidden = true;
+                searchInput.focus();
+                window.location.href = '/moradias';
+            });
+
+            searchInput.addEventListener('input', () => {
+                clearSearchBtn.hidden = !searchInput.value.trim();
+            });
+        }
+
+        const favoritesFilter = document.querySelector('#toggle-favorites');
+        if (favoritesFilter) {
+            const favoriteCards = Array.from(document.querySelectorAll('.property-card[data-property-id]'));
+            const favoritesCount = document.querySelector('#favorites-count');
+            const favoritesEmpty = document.querySelector('#favorites-empty');
+            const savedHomes = new Set();
+
+            function updateFavorites() {
+                const showingSaved = favoritesFilter.getAttribute('aria-pressed') === 'true';
+
+                favoriteCards.forEach((card) => {
+                    const favoriteButton = card.querySelector('.favorite-pill');
+                    const isSaved = savedHomes.has(card.dataset.propertyId);
+
+                    favoriteButton.setAttribute('aria-pressed', String(isSaved));
+                    favoriteButton.setAttribute('aria-label', isSaved ? 'Remover moradia dos salvos' : 'Salvar moradia');
+                    favoriteButton.setAttribute('title', isSaved ? 'Remover dos salvos' : 'Salvar moradia');
+                    favoriteButton.textContent = isSaved ? '♥' : '♡';
+                    card.hidden = showingSaved && !isSaved;
+                });
+
+                favoritesCount.textContent = String(savedHomes.size);
+                favoritesEmpty.hidden = !showingSaved || savedHomes.size > 0;
+            }
+
+            document.querySelectorAll('.favorite-pill').forEach((button) => {
+                button.addEventListener('click', () => {
+                    const card = button.closest('.property-card');
+                    const propertyId = card.dataset.propertyId;
+
+                    if (savedHomes.has(propertyId)) {
+                        savedHomes.delete(propertyId);
+                    } else {
+                        savedHomes.add(propertyId);
+                    }
+
+                    updateFavorites();
+                });
+            });
+
+            favoritesFilter.addEventListener('click', () => {
+                const showingSaved = favoritesFilter.getAttribute('aria-pressed') !== 'true';
+                favoritesFilter.setAttribute('aria-pressed', String(showingSaved));
+                favoritesFilter.querySelector('span:nth-child(2)').textContent = showingSaved ? 'Ver todas' : 'Ver salvos';
+                updateFavorites();
+            });
+        }
+
+        const regionTabs = document.querySelectorAll('.guide-region-tab');
+        const categoryTabs = document.querySelectorAll('.guide-tab');
+        const guideCards = document.querySelectorAll('.guide-card');
+
+        function applyGuideFilters() {
+            const activeRegion = document.querySelector('.guide-region-tab.active')?.dataset.region || 'todas';
+            const activeCategory = document.querySelector('.guide-tab.active')?.dataset.category || 'todos';
+
+            guideCards.forEach((card) => {
+                const matchesRegion = activeRegion === 'todas' || card.dataset.region === activeRegion;
+                const matchesCategory = activeCategory === 'todos' || card.dataset.category === activeCategory;
+                card.hidden = !(matchesRegion && matchesCategory);
+            });
+        }
+
+        regionTabs.forEach((tab) => {
+            tab.addEventListener('click', () => {
+                regionTabs.forEach((button) => {
+                    const active = button === tab;
+                    button.classList.toggle('active', active);
+                    button.setAttribute('aria-pressed', String(active));
+                });
+                applyGuideFilters();
+            });
+        });
+
+        categoryTabs.forEach((tab) => {
+            tab.addEventListener('click', () => {
+                const category = tab.dataset.category;
+
+                categoryTabs.forEach((button) => {
+                    const active = button === tab;
+                    button.classList.toggle('active', active);
+                    button.setAttribute('aria-pressed', String(active));
+                });
+
+                applyGuideFilters();
+            });
+        });
+    </script>
+</body>
+</html>

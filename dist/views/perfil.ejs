@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Minha conta | Moradia IFES</title>
+    <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+    <div class="page-shell profile-shell">
+        <header class="topbar">
+            <a href="/moradias" class="brand">
+                <img class="brand-logo" src="/logo-moradia-ifes.png" alt="" />
+                <span>Moradia IFES</span>
+            </a>
+            <div class="topbar-actions">
+                <a class="btn btn-ghost" href="/moradias">Explorar moradias</a>
+                <a class="account-avatar-link" href="/perfil" aria-label="Minha conta">
+                    <% if (usuario.fotoTipo) { %>
+                        <img src="/perfil/foto" alt="" />
+                    <% } else { %>
+                        <span><%= usuario.nome.charAt(0).toUpperCase() %></span>
+                    <% } %>
+                </a>
+                <a class="btn btn-ghost" href="/logout">Sair</a>
+            </div>
+        </header>
+
+        <main class="profile-page">
+            <section class="profile-welcome">
+                <span class="guide-eyebrow">SUA CONTA MORADIA IFES</span>
+                <h1>Olá, <%= usuario.nome.split(' ')[0] %> <span aria-hidden="true">✦</span></h1>
+                <p>Gerencie seus dados e acompanhe os imóveis que você anunciou.</p>
+            </section>
+
+            <% if (erro) { %>
+                <div class="listing-error" role="alert"><span aria-hidden="true">!</span><%= erro %></div>
+            <% } %>
+            <% if (sucesso) { %>
+                <div class="profile-success" role="status"><span aria-hidden="true">✓</span> Suas informações foram atualizadas.</div>
+            <% } %>
+            <% if (senhaAtualizada) { %>
+                <div class="profile-success" role="status"><span aria-hidden="true">✓</span> Sua senha foi alterada.</div>
+            <% } %>
+            <% if (removida) { %>
+                <div class="profile-success" role="status"><span aria-hidden="true">✓</span> O anúncio foi removido.</div>
+            <% } %>
+
+            <div class="profile-layout">
+                <section class="profile-content">
+                    <section class="profile-panel" aria-labelledby="personal-info-title">
+                        <div class="profile-panel-heading">
+                            <div>
+                                <span class="step-kicker">SEUS DADOS</span>
+                                <h2 id="personal-info-title">Informações pessoais</h2>
+                                <p>Mantenha seus dados de contato atualizados.</p>
+                            </div>
+                        </div>
+
+                        <form action="/perfil" method="POST" enctype="multipart/form-data" id="profile-form">
+                            <div class="profile-photo-editor">
+                                <div class="profile-photo-large" id="profile-photo-preview">
+                                    <% if (usuario.fotoTipo) { %>
+                                        <img src="/perfil/foto" alt="Sua foto de perfil" />
+                                    <% } else { %>
+                                        <span><%= usuario.nome.charAt(0).toUpperCase() %></span>
+                                    <% } %>
+                                </div>
+                                <div>
+                                    <strong>Sua foto de perfil</strong>
+                                    <p>Ajude as pessoas a reconhecerem seu perfil.</p>
+                                    <label class="btn btn-secondary photo-select-button" for="profile-photo-input">Escolher foto</label>
+                                    <input id="profile-photo-input" name="foto" type="file" accept="image/jpeg,image/png,image/webp" hidden />
+                                    <small id="profile-photo-name">JPG, PNG ou WebP · até 5 MB</small>
+                                    <% if (usuario.fotoTipo) { %>
+                                        <button class="remove-profile-photo" type="submit" form="delete-profile-photo-form">Remover foto</button>
+                                    <% } %>
+                                </div>
+                            </div>
+
+                            <div class="form-grid profile-fields">
+                                <div class="field">
+                                    <label for="nome">Nome completo</label>
+                                    <input id="nome" name="nome" type="text" maxlength="100" value="<%= usuario.nome %>" autocomplete="name" required />
+                                </div>
+                                <div class="field">
+                                    <label for="email">E-mail</label>
+                                    <input id="email" name="email" type="email" maxlength="254" value="<%= usuario.email %>" autocomplete="email" required />
+                                </div>
+                                <div class="field full">
+                                    <label for="telefone">Telefone</label>
+                                    <input id="telefone" name="telefone" type="tel" maxlength="20" value="<%= usuario.telefone || '' %>" autocomplete="tel" placeholder="(27) 99999-9999" />
+                                </div>
+                            </div>
+
+                            <div class="profile-form-actions">
+                                <span>Conta criada com segurança para sua comunidade.</span>
+                                <button class="btn btn-primary" type="submit">Salvar alterações</button>
+                            </div>
+                        </form>
+                        <form id="delete-profile-photo-form" action="/perfil/foto/excluir" method="POST" hidden></form>
+
+                        <details class="password-change">
+                            <summary>Alterar senha</summary>
+                            <p>Para sua segurança, confirme sua senha atual antes de escolher uma nova.</p>
+                            <form action="/perfil/senha" method="POST" class="password-change-form">
+                                <div class="form-grid">
+                                    <div class="field full">
+                                        <label for="senhaAtual">Senha atual</label>
+                                        <input id="senhaAtual" name="senhaAtual" type="password" autocomplete="current-password" required />
+                                    </div>
+                                    <div class="field">
+                                        <label for="novaSenha">Nova senha</label>
+                                        <input id="novaSenha" name="novaSenha" type="password" minlength="6" autocomplete="new-password" required />
+                                    </div>
+                                    <div class="field">
+                                        <label for="confirmarSenha">Confirmar nova senha</label>
+                                        <input id="confirmarSenha" name="confirmarSenha" type="password" minlength="6" autocomplete="new-password" required />
+                                    </div>
+                                </div>
+                                <div class="profile-form-actions">
+                                    <span>A senha precisa ter pelo menos 6 caracteres.</span>
+                                    <button class="btn btn-primary" type="submit">Atualizar senha</button>
+                                </div>
+                            </form>
+                        </details>
+                    </section>
+
+                    <section class="profile-panel listings-panel" aria-labelledby="my-listings-title">
+                        <div class="profile-panel-heading listings-heading">
+                            <div>
+                                <span class="step-kicker">SEUS ANÚNCIOS</span>
+                                <h2 id="my-listings-title">Moradias publicadas <span class="listing-count"><%= moradias.length %></span></h2>
+                                <p>Acompanhe e gerencie os imóveis publicados por você.</p>
+                            </div>
+                            <a class="btn btn-primary" href="/moradias/novo">＋ Anunciar imóvel</a>
+                        </div>
+
+                        <% if (moradias.length === 0) { %>
+                            <div class="profile-empty-listings">
+                                <span aria-hidden="true">⌂</span>
+                                <h3>Seus anúncios começam por aqui</h3>
+                                <p>Quando publicar uma moradia, ela aparecerá nesta área para você acompanhar.</p>
+                                <a class="btn btn-primary" href="/moradias/novo">Criar meu primeiro anúncio</a>
+                            </div>
+                        <% } else { %>
+                            <div class="my-listings-list">
+                                <% moradias.forEach((moradia) => { %>
+                                    <article class="my-listing-card">
+                                        <a class="my-listing-image" href="/moradias/<%= moradia.id %>">
+                                            <img src="<%= moradia.imagem || ('/moradias/' + moradia.id + '/imagem') %>" alt="<%= moradia.titulo %>" />
+                                        </a>
+                                        <div class="my-listing-info">
+                                            <div class="my-listing-title-row">
+                                                <h3><a href="/moradias/<%= moradia.id %>"><%= moradia.titulo %></a></h3>
+                                                <span class="status <%= moradia.disponivel ? '' : 'red' %>"><%= moradia.disponivel ? 'Disponível' : 'Indisponível' %></span>
+                                            </div>
+                                            <p>📍 <%= moradia.bairro %> · <%= moradia.tipo %></p>
+                                            <strong>R$ <%= Number(moradia.preco).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) %><small>/mês</small></strong>
+                                            <div class="my-listing-actions">
+                                                <a href="/moradias/<%= moradia.id %>">Ver anúncio <span aria-hidden="true">↗</span></a>
+                                                <form action="/perfil/moradias/<%= moradia.id %>/excluir" method="POST" onsubmit="return confirm('Tem certeza que deseja excluir este anúncio? Esta ação não pode ser desfeita.');">
+                                                    <button type="submit" class="delete-listing-button">Excluir anúncio</button>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    </article>
+                                <% }) %>
+                            </div>
+                        <% } %>
+                    </section>
+                </section>
+
+                <aside class="profile-sidebar">
+                    <section class="profile-summary-card">
+                        <div class="profile-summary-avatar">
+                            <% if (usuario.fotoTipo) { %>
+                                <img src="/perfil/foto" alt="" />
+                            <% } else { %>
+                                <span><%= usuario.nome.charAt(0).toUpperCase() %></span>
+                            <% } %>
+                        </div>
+                        <h2><%= usuario.nome %></h2>
+                        <p><%= usuario.email %></p>
+                        <span class="member-badge">✦ Membro Moradia IFES</span>
+                        <div class="profile-stats">
+                            <div><strong><%= moradias.length %></strong><span>Anúncios</span></div>
+                            <div><strong><%= usuario.tipo === 'PROPRIETARIO' ? 'Proprietário' : 'Membro' %></strong><span>Perfil</span></div>
+                        </div>
+                    </section>
+
+                    <section class="profile-help-card">
+                        <span aria-hidden="true">🌿</span>
+                        <h3>Um espaço para a comunidade</h3>
+                        <p>Seu perfil ajuda a aproximar estudantes e proprietários da região de Santa Teresa.</p>
+                        <a href="/moradias">Explorar moradias <span aria-hidden="true">→</span></a>
+                    </section>
+                </aside>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const photoInput = document.querySelector('#profile-photo-input');
+        const photoName = document.querySelector('#profile-photo-name');
+        const photoPreview = document.querySelector('#profile-photo-preview');
+        let profilePreviewUrl = null;
+
+        photoInput.addEventListener('change', () => {
+            const file = photoInput.files[0];
+            if (!file) return;
+            if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 5 * 1024 * 1024) {
+                photoInput.value = '';
+                photoName.textContent = 'Escolha JPG, PNG ou WebP com até 5 MB.';
+                return;
+            }
+            if (profilePreviewUrl) URL.revokeObjectURL(profilePreviewUrl);
+            profilePreviewUrl = URL.createObjectURL(file);
+            photoPreview.innerHTML = '';
+            const image = document.createElement('img');
+            image.src = profilePreviewUrl;
+            image.alt = 'Prévia da nova foto de perfil';
+            photoPreview.appendChild(image);
+            photoName.textContent = file.name;
+        });
+    </script>
+</body>
+</html>
