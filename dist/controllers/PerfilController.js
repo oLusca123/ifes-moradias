@@ -28,7 +28,10 @@ class PerfilController {
             erro: options.erro || null,
             sucesso: req.query.sucesso === "1",
             senhaAtualizada: req.query.senhaAtualizada === "1",
-            removida: req.query.removida === "1"
+            removida: req.query.removida === "1",
+            asaasConfigurado: Boolean(process.env.ASAAS_API_KEY),
+            contaPagamento: req.query.contaPagamento === "1",
+            pagamentoErro: req.query.pagamentoErro === "1"
         });
     }
     static async show(req, res) {
@@ -136,7 +139,11 @@ class PerfilController {
             if (!usuario) {
                 return res.status(404).send("Usuário não encontrado.");
             }
-            if (!senhaAtual || !await bcrypt_1.default.compare(senhaAtual, usuario.senha)) {
+            const algumCampoPreenchido = senhaAtual.trim() !== "" || novaSenha.trim() !== "" || confirmarSenha.trim() !== "";
+            if (!algumCampoPreenchido) {
+                return res.redirect("/perfil");
+            }
+            if (!senhaAtual || !(await bcrypt_1.default.compare(senhaAtual, usuario.senha))) {
                 return await PerfilController.renderPerfil(req, res, {
                     erro: "Digite sua senha atual corretamente para alterá-la."
                 });
@@ -195,6 +202,30 @@ class PerfilController {
         catch (error) {
             console.error("Erro ao excluir anúncio do perfil:", error);
             return res.status(500).send("Erro ao excluir o anúncio.");
+        }
+    }
+    static async updatePaymentAccount(req, res) {
+        try {
+            const usuarioRepo = BDConn_1.BancoDeDados.getRepository(Usuario_1.Usuario);
+            const usuario = await usuarioRepo.findOne({
+                where: { id: PerfilController.getUsuarioId(req) }
+            });
+            if (!usuario) {
+                return res.status(404).send("Usuário não encontrado.");
+            }
+            const walletId = typeof req.body.asaasWalletId === "string"
+                ? req.body.asaasWalletId.trim()
+                : "";
+            if (walletId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(walletId)) {
+                return res.redirect("/perfil?pagamentoErro=1");
+            }
+            usuario.asaasWalletId = walletId || null;
+            await usuarioRepo.save(usuario);
+            return res.redirect("/perfil?contaPagamento=1");
+        }
+        catch (error) {
+            console.error("Erro ao atualizar carteira de recebimento:", error);
+            return res.status(500).send("Erro ao salvar os dados de recebimento.");
         }
     }
 }

@@ -4,6 +4,7 @@ import multer from "multer";
 import { MoradiaController } from "./controllers/MoradiaController";
 import { AuthController } from "./controllers/AuthController";
 import { PerfilController } from "./controllers/PerfilController";
+import { LocacaoController } from "./controllers/LocacaoController";
 
 const router = Router();
 const maxImageSize = 5 * 1024 * 1024;
@@ -153,6 +154,12 @@ router.post(
 );
 
 router.post(
+    "/perfil/conta-recebimento",
+    requireAuth,
+    PerfilController.updatePaymentAccount
+);
+
+router.post(
     "/perfil/senha",
     requireAuth,
     PerfilController.changePassword
@@ -169,6 +176,13 @@ router.post(
     requireAuth,
     PerfilController.removeListing
 );
+
+router.get("/alugueis", requireAuth, LocacaoController.dashboard);
+router.get("/alugueis/contratar/:moradiaId", requireAuth, LocacaoController.checkout);
+router.post("/alugueis/contratar/:moradiaId", requireAuth, LocacaoController.createRental);
+router.get("/alugueis/:id", requireAuth, LocacaoController.showRental);
+router.get("/alugueis/pagamento/:paymentId/pix", requireAuth, LocacaoController.pix);
+router.post("/webhooks/asaas", LocacaoController.webhook);
 
 
 // ==========================================================

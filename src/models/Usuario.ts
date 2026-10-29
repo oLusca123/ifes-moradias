@@ -39,4 +39,7 @@ export class Usuario {
 
     @Column({ type: "text", nullable: true })
     fotoTipo!: string | null;
+
+    @Column({ type: "text", nullable: true, unique: true })
+    asaasWalletId!: string | null;
 }

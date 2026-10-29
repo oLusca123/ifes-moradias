@@ -357,6 +357,7 @@ export class MoradiaController {
                 moradia,
                 comodidades: JSON.parse(moradia.comodidades || '[]') as string[],
                 usuario: req.session && (req.session as any).usuarioNome ? {
+                    id: Number((req.session as any).usuarioId),
                     nome: (req.session as any).usuarioNome,
                     tipo: (req.session as any).usuarioTipo,
                     foto: (req.session as any).usuarioFoto
@@ -372,6 +373,7 @@ export class MoradiaController {
         return res.render('moradia_novo', {
             erro: null,
             form: {},
+            asaasConfigurado: Boolean(process.env.ASAAS_API_KEY),
             usuario: req.session && (req.session as any).usuarioNome ? {
                 nome: (req.session as any).usuarioNome,
                 tipo: (req.session as any).usuarioTipo,

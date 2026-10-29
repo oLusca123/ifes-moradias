@@ -14,6 +14,7 @@
                 <span>Moradia IFES</span>
             </a>
             <div class="topbar-actions">
+                <a class="btn btn-ghost" href="/alugueis">Meus aluguéis</a>
                 <a class="btn btn-ghost" href="/moradias">Explorar moradias</a>
                 <a class="account-avatar-link" href="/perfil" aria-label="Minha conta">
                     <% if (usuario.fotoTipo) { %>
@@ -44,6 +45,12 @@
             <% } %>
             <% if (removida) { %>
                 <div class="profile-success" role="status"><span aria-hidden="true">✓</span> O anúncio foi removido.</div>
+            <% } %>
+            <% if (contaPagamento) { %>
+                <div class="profile-success" role="status"><span aria-hidden="true">✓</span> Dados de recebimento atualizados.</div>
+            <% } %>
+            <% if (pagamentoErro) { %>
+                <div class="listing-error" role="alert"><span aria-hidden="true">!</span> O identificador da carteira não parece válido. Confira o Wallet ID no Asaas.</div>
             <% } %>
 
             <div class="profile-layout">
@@ -107,23 +114,61 @@
                                 <div class="form-grid">
                                     <div class="field full">
                                         <label for="senhaAtual">Senha atual</label>
-                                        <input id="senhaAtual" name="senhaAtual" type="password" autocomplete="current-password" required />
+                                        <input id="senhaAtual" name="senhaAtual" type="password" autocomplete="current-password" />
                                     </div>
                                     <div class="field">
                                         <label for="novaSenha">Nova senha</label>
-                                        <input id="novaSenha" name="novaSenha" type="password" minlength="6" autocomplete="new-password" required />
+                                        <input id="novaSenha" name="novaSenha" type="password" minlength="6" autocomplete="new-password" />
                                     </div>
                                     <div class="field">
                                         <label for="confirmarSenha">Confirmar nova senha</label>
-                                        <input id="confirmarSenha" name="confirmarSenha" type="password" minlength="6" autocomplete="new-password" required />
+                                        <input id="confirmarSenha" name="confirmarSenha" type="password" minlength="6" autocomplete="new-password" />
                                     </div>
                                 </div>
                                 <div class="profile-form-actions">
-                                    <span>A senha precisa ter pelo menos 6 caracteres.</span>
+                                    <span>Preencha apenas se quiser alterar sua senha.</span>
                                     <button class="btn btn-primary" type="submit">Atualizar senha</button>
                                 </div>
                             </form>
                         </details>
+                    </section>
+
+                    <section class="profile-panel payment-setup-panel" aria-labelledby="payment-setup-title">
+                        <div class="profile-panel-heading">
+                            <div>
+                                <span class="step-kicker">RECEBIMENTOS</span>
+                                <h2 id="payment-setup-title">Configure seus recebimentos de aluguel</h2>
+                                <p>Para receber pelo site, você precisa ter uma conta Asaas validada. A chave Pix sozinha não permite fazer o split automático.</p>
+                            </div>
+                        </div>
+                        <% if (!asaasConfigurado) { %>
+                            <div class="payment-setup-warning">A integração Asaas ainda não está ativada no servidor. Você pode salvar seu Wallet ID, mas cobranças online só serão liberadas depois que a plataforma configurar as credenciais e o webhook.</div>
+                        <% } %>
+                        <ol class="payment-steps">
+                            <li><strong>1. Crie e valide sua conta Asaas</strong><span>Cadastre-se como proprietário em <a href="https://www.asaas.com/" target="_blank" rel="noopener noreferrer">asaas.com</a> e conclua as verificações solicitadas.</span></li>
+                            <li><strong>2. Configure como vai movimentar os recebimentos</strong><span>No painel Asaas, cadastre uma conta bancária ou uma chave Pix para movimentar o saldo. A chave Pix fica no Asaas; não a informe neste site. Os menus podem variar conforme sua conta. Se necessário, consulte a <a href="https://www.asaas.com/central-de-ajuda" target="_blank" rel="noopener noreferrer">Central de Ajuda do Asaas</a>.</span></li>
+                            <li><strong>3. Obtenha o Wallet ID</strong><span>Copie o identificador da carteira conforme a <a href="https://docs.asaas.com/reference/recuperar-walletid" target="_blank" rel="noopener noreferrer">documentação oficial do Asaas</a>. Wallet ID não é chave Pix, senha ou chave API.</span></li>
+                            <li><strong>4. Salve o Wallet ID neste perfil</strong><span>O Wallet ID identifica a carteira destinatária do split. Após a plataforma ativar a integração, o Asaas encaminhará a parte do proprietário para essa carteira.</span></li>
+                        </ol>
+                        <div class="payment-wallet-guide">
+                            <h3>Passo a passo para cadastrar e conferir</h3>
+                            <ol>
+                                <li>Entre na conta Asaas do proprietário e confirme que o cadastro está aprovado.</li>
+                                <li>Cadastre ou confirme no Asaas a conta bancária/chave Pix que será usada para movimentar o saldo da carteira.</li>
+                                <li>Recupere o Wallet ID usando as orientações oficiais do Asaas.</li>
+                                <li>Cole o Wallet ID no campo abaixo e selecione <strong>Salvar dados de recebimento</strong>.</li>
+                                <li>Confira se o identificador salvo está correto. Nunca envie ao site sua chave API, senha ou código de autenticação.</li>
+                            </ol>
+                        </div>
+                        <form action="/perfil/conta-recebimento" method="POST" class="payment-wallet-form">
+                            <div class="field">
+                                <label for="asaasWalletId">Wallet ID do Asaas</label>
+                                <input id="asaasWalletId" name="asaasWalletId" type="text" value="<%= usuario.asaasWalletId || '' %>" maxlength="36" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" autocomplete="off" />
+                                <small>Informe somente o Wallet ID. Não informe sua senha, chave API ou chave Pix neste campo.</small>
+                            </div>
+                            <button class="btn btn-primary" type="submit">Salvar dados de recebimento</button>
+                        </form>
+                        <p class="payment-fee-note">O split atual destina 99% do valor líquido à carteira do proprietário e deixa 1% do valor líquido na carteira Asaas da plataforma. Tarifas do Asaas são descontadas antes da divisão. O saldo da plataforma não é enviado automaticamente para uma chave Pix; transferências e regras da operação devem ser confirmadas no Asaas.</p>
                     </section>
 
                     <section class="profile-panel listings-panel" aria-labelledby="my-listings-title">

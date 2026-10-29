@@ -9,6 +9,7 @@ const multer_1 = __importDefault(require("multer"));
 const MoradiaController_1 = require("./controllers/MoradiaController");
 const AuthController_1 = require("./controllers/AuthController");
 const PerfilController_1 = require("./controllers/PerfilController");
+const LocacaoController_1 = require("./controllers/LocacaoController");
 const router = (0, express_1.Router)();
 exports.router = router;
 const maxImageSize = 5 * 1024 * 1024;
@@ -100,9 +101,16 @@ router.post("/moradias/novo", requireAuth, handleListingImageUpload, MoradiaCont
 router.get("/perfil", requireAuth, PerfilController_1.PerfilController.show);
 router.get("/perfil/foto", requireAuth, PerfilController_1.PerfilController.photo);
 router.post("/perfil", requireAuth, handleProfilePhotoUpload, PerfilController_1.PerfilController.update);
+router.post("/perfil/conta-recebimento", requireAuth, PerfilController_1.PerfilController.updatePaymentAccount);
 router.post("/perfil/senha", requireAuth, PerfilController_1.PerfilController.changePassword);
 router.post("/perfil/foto/excluir", requireAuth, PerfilController_1.PerfilController.deletePhoto);
 router.post("/perfil/moradias/:id/excluir", requireAuth, PerfilController_1.PerfilController.removeListing);
+router.get("/alugueis", requireAuth, LocacaoController_1.LocacaoController.dashboard);
+router.get("/alugueis/contratar/:moradiaId", requireAuth, LocacaoController_1.LocacaoController.checkout);
+router.post("/alugueis/contratar/:moradiaId", requireAuth, LocacaoController_1.LocacaoController.createRental);
+router.get("/alugueis/:id", requireAuth, LocacaoController_1.LocacaoController.showRental);
+router.get("/alugueis/pagamento/:paymentId/pix", requireAuth, LocacaoController_1.LocacaoController.pix);
+router.post("/webhooks/asaas", LocacaoController_1.LocacaoController.webhook);
 // ==========================================================
 // AUTENTICAÇÃO
 // ==========================================================

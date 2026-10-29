@@ -55,6 +55,10 @@ __decorate([
     (0, typeorm_1.Column)({ type: "text", nullable: true }),
     __metadata("design:type", Object)
 ], Usuario.prototype, "fotoTipo", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: "text", nullable: true, unique: true }),
+    __metadata("design:type", Object)
+], Usuario.prototype, "asaasWalletId", void 0);
 exports.Usuario = Usuario = __decorate([
     (0, typeorm_1.Entity)("usuario")
 ], Usuario);

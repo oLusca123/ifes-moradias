@@ -97,6 +97,9 @@
                         </div>
                     </div>
                     <div style="margin-top: 18px; display:flex; gap:10px; flex-direction: column;">
+                        <% if (!moradia.demonstracao && moradia.disponivel && moradia.proprietarioId && usuario && usuario.id !== moradia.proprietarioId) { %>
+                            <a class="btn btn-primary" href="/alugueis/contratar/<%= moradia.id %>">Alugar e pagar pelo site</a>
+                        <% } %>
                         <% if (moradia.telefone) { %>
                             <a class="btn btn-primary" href="tel:<%= moradia.telefone.replace(/[^\d+]/g, '') %>">Entrar em contato</a>
                         <% } %>

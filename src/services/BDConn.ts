@@ -3,6 +3,7 @@ import { DataSource } from "typeorm";
 
 import { Moradia } from "../models/Moradia";
 import { Usuario } from "../models/Usuario";
+import { AsaasWebhookEvent, Locacao, PagamentoAluguel } from "../models/Locacao";
 
 export const BancoDeDados = new DataSource({
     type: "better-sqlite3",
@@ -13,7 +14,10 @@ export const BancoDeDados = new DataSource({
 
     entities: [
         Moradia,
-        Usuario
+        Usuario,
+        Locacao,
+        PagamentoAluguel,
+        AsaasWebhookEvent
     ],
 
     migrations: [],

@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Contratar aluguel | Moradia IFES</title>
+    <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+    <div class="page-shell payment-shell">
+        <header class="topbar">
+            <a href="/moradias" class="brand"><img class="brand-logo" src="/logo-moradia-ifes.png" alt="" /><span>Moradia IFES</span></a>
+            <div class="topbar-actions"><a class="btn btn-ghost" href="/alugueis">Meus aluguéis</a><a class="btn btn-ghost" href="/moradias/<%= moradia.id %>">Voltar ao imóvel</a></div>
+        </header>
+        <main class="payment-page">
+            <section class="payment-page-heading">
+                <span class="guide-eyebrow">COBRANÇA MENSAL VIA PIX</span>
+                <h1>Alugue pelo site</h1>
+                <p>Confira os dados, autorize a primeira cobrança e acompanhe os próximos vencimentos na sua área de aluguéis.</p>
+            </section>
+            <% if (erro) { %><div class="listing-error" role="alert"><%= erro %></div><% } %>
+
+            <div class="checkout-layout">
+                <section class="payment-panel">
+                    <h2><%= moradia.titulo %></h2>
+                    <p class="checkout-location">📍 <%= moradia.localizacao || moradia.bairro %></p>
+                    <div class="checkout-price">R$ <%= Number(breakdown.valorCobrado || moradia.preco * 1.01).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) %><small> / mês</small></div>
+                    <div class="payment-breakdown">
+                        <div><span>Valor anunciado</span><strong>R$ <%= Number(breakdown.valorAnunciado).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) %></strong></div>
+                        <div><span>Taxa da plataforma</span><strong>R$ <%= Number(breakdown.taxaPlataforma).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) %></strong></div>
+                        <div><span>Valor para o dono</span><strong>R$ <%= Number(breakdown.valorParaDono).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) %></strong></div>
+                    </div>
+                    <p>A cobrança mensal inclui o valor da plataforma. Com o Asaas ativo, o split direciona a parte do proprietário para o Wallet ID cadastrado; a parte da plataforma fica na carteira Asaas da plataforma. Isso não equivale a uma transferência automática para uma chave Pix.</p>
+                    <% if (!asaasConfigurado) { %>
+                        <div class="payment-setup-warning">A integração do Asaas ainda não está ativa. Nenhuma cobrança será criada nem confirmada manualmente por esta página. Tente novamente quando a plataforma habilitar os pagamentos.</div>
+                    <% } else if (erro && erro.includes('proprietário')) { %>
+                        <div class="payment-setup-warning">O proprietário precisa concluir o cadastro de recebimento em <a href="/perfil">Minha conta</a> antes da contratação.</div>
+                    <% } else { %>
+                        <form action="/alugueis/contratar/<%= moradia.id %>" method="POST" class="checkout-form">
+                            <div class="field">
+                                <label for="cpfCnpj">CPF ou CNPJ do pagador</label>
+                                <input id="cpfCnpj" name="cpfCnpj" type="text" inputmode="numeric" autocomplete="off" maxlength="18" required />
+                                <small>Enviado ao Asaas para criar a cobrança. O site não salva este documento.</small>
+                            </div>
+                            <button class="btn btn-primary" type="submit">Criar contrato e cobrança mensal</button>
+                        </form>
+                    <% } %>
+                </section>
+                <aside class="payment-panel checkout-steps">
+                    <span class="step-kicker">COMO FUNCIONA</span>
+                    <ol class="payment-steps">
+                        <li><strong>1. O anunciante publica a moradia</strong><span>O valor do imóvel continua sendo o valor do aluguel anunciado. A plataforma acrescenta automaticamente 1% sobre esse valor no pagamento.</span></li>
+                        <li><strong>2. O locatário paga</strong><span>O cliente paga o valor total com taxa incluída e recebe o QR Pix ou código do pagamento na próxima etapa.</span></li>
+                        <li><strong>3. O Asaas processa a cobrança</strong><span>O split encaminha a parte destinada ao proprietário ao Wallet ID cadastrado e mantém a parte da plataforma na carteira Asaas da plataforma. Tarifas do provedor podem alterar os valores líquidos recebidos.</span></li>
+                        <li><strong>4. Acompanhamento</strong><span>Os próximos pagamentos e o status ficam em “Meus aluguéis”.</span></li>
+                    </ol>
+                    <p class="payment-fee-note">O proprietário precisa ter conta Asaas validada e Wallet ID cadastrado no perfil. A chave Pix da plataforma não recebe automaticamente o split; confirme as regras de movimentação e tarifas diretamente com o Asaas.</p>
+                </aside>
+            </div>
+        </main>
+    </div>
+</body>
+</html>

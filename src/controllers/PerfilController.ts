@@ -1,5 +1,6 @@
-import { Request, Response } from "express";
+﻿import { Request, Response } from "express";
 import bcrypt from "bcrypt";
+
 import { BancoDeDados } from "../services/BDConn";
 import { Moradia } from "../models/Moradia";
 import { Usuario } from "../models/Usuario";
@@ -32,7 +33,10 @@ export class PerfilController {
             erro: options.erro || null,
             sucesso: req.query.sucesso === "1",
             senhaAtualizada: req.query.senhaAtualizada === "1",
-            removida: req.query.removida === "1"
+            removida: req.query.removida === "1",
+            asaasConfigurado: Boolean(process.env.ASAAS_API_KEY),
+            contaPagamento: req.query.contaPagamento === "1",
+            pagamentoErro: req.query.pagamentoErro === "1"
         });
     }
 
@@ -122,6 +126,7 @@ export class PerfilController {
             usuario.nome = nome;
             usuario.email = email;
             usuario.telefone = telefone;
+
             if (req.file) {
                 usuario.fotoDados = req.file.buffer;
                 usuario.fotoTipo = req.file.mimetype;
@@ -155,7 +160,12 @@ export class PerfilController {
                 return res.status(404).send("Usuário não encontrado.");
             }
 
-            if (!senhaAtual || !await bcrypt.compare(senhaAtual, usuario.senha)) {
+            const algumCampoPreenchido = senhaAtual.trim() !== "" || novaSenha.trim() !== "" || confirmarSenha.trim() !== "";
+            if (!algumCampoPreenchido) {
+                return res.redirect("/perfil");
+            }
+
+            if (!senhaAtual || !(await bcrypt.compare(senhaAtual, usuario.senha))) {
                 return await PerfilController.renderPerfil(req, res, {
                     erro: "Digite sua senha atual corretamente para alterá-la."
                 });
@@ -222,6 +232,35 @@ export class PerfilController {
         } catch (error) {
             console.error("Erro ao excluir anúncio do perfil:", error);
             return res.status(500).send("Erro ao excluir o anúncio.");
+        }
+    }
+
+    static async updatePaymentAccount(req: Request, res: Response) {
+        try {
+            const usuarioRepo = BancoDeDados.getRepository(Usuario);
+            const usuario = await usuarioRepo.findOne({
+                where: { id: PerfilController.getUsuarioId(req) }
+            });
+
+            if (!usuario) {
+                return res.status(404).send("Usuário não encontrado.");
+            }
+
+            const walletId = typeof req.body.asaasWalletId === "string"
+                ? req.body.asaasWalletId.trim()
+                : "";
+
+            if (walletId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(walletId)) {
+                return res.redirect("/perfil?pagamentoErro=1");
+            }
+
+            usuario.asaasWalletId = walletId || null;
+            await usuarioRepo.save(usuario);
+
+            return res.redirect("/perfil?contaPagamento=1");
+        } catch (error) {
+            console.error("Erro ao atualizar carteira de recebimento:", error);
+            return res.status(500).send("Erro ao salvar os dados de recebimento.");
         }
     }
 }

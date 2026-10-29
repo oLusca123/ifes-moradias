@@ -3327,3 +3327,363 @@ textarea:focus-visible {
     padding: 12px;
   }
 }
+
+.payment-setup-panel {
+  display: grid;
+  gap: 18px;
+}
+
+.payment-setup-warning {
+  padding: 14px 16px;
+  border: 1px solid rgba(123, 105, 57, 0.2);
+  border-radius: 14px;
+  background: #fff8df;
+  color: #655b43;
+  line-height: 1.6;
+}
+
+.payment-steps {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+  padding-left: 1.4rem;
+  color: #355c49;
+}
+
+.payment-steps li {
+  padding-left: 4px;
+}
+
+.payment-steps strong,
+.payment-steps span {
+  display: block;
+}
+
+.payment-steps span {
+  margin-top: 4px;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.payment-wallet-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 14px;
+}
+
+.payment-wallet-form small {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.payment-fee-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.6;
+}
+
+.payment-wallet-guide {
+  display: grid;
+  gap: 10px;
+  padding: 18px 20px;
+  border: 1px solid rgba(46, 102, 78, 0.14);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(138, 198, 164, 0.08), rgba(216, 244, 223, 0.08));
+  color: #355c49;
+}
+
+.payment-wallet-guide h3 {
+  margin: 0;
+  font-size: 1.02rem;
+}
+
+.payment-wallet-guide ol {
+  margin: 0;
+  padding-left: 1.2rem;
+  display: grid;
+  gap: 8px;
+  line-height: 1.6;
+}
+
+.wallet-legend {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.listing-wallet-guide {
+  margin-top: 18px;
+}
+
+.payment-shell {
+  max-width: 1080px;
+}
+
+.payment-page {
+  margin-top: 34px;
+}
+
+.payment-page-heading {
+  margin-bottom: 24px;
+}
+
+.payment-page-heading h1,
+.pix-panel h1 {
+  margin: 0 0 8px;
+  color: #234738;
+  font-size: clamp(2rem, 5vw, 3.2rem);
+  letter-spacing: -0.05em;
+}
+
+.payment-page-heading p {
+  max-width: 720px;
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.65;
+}
+
+.payment-empty,
+.payment-panel,
+.rental-card {
+  border: 1px solid rgba(76, 93, 83, 0.12);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: var(--shadow-card);
+}
+
+.payment-empty {
+  display: grid;
+  justify-items: center;
+  margin-top: 20px;
+  padding: 36px 22px;
+  text-align: center;
+}
+
+.payment-empty > span {
+  color: #648e72;
+  font-size: 2rem;
+}
+
+.payment-empty h2 {
+  margin: 10px 0 6px;
+  color: #294537;
+}
+
+.payment-empty p {
+  max-width: 560px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.payment-empty.compact {
+  margin-top: 16px;
+  padding: 18px;
+}
+
+.payment-empty.compact p {
+  margin: 0;
+}
+
+.rental-list {
+  display: grid;
+  gap: 16px;
+}
+
+.rental-card,
+.payment-panel {
+  padding: clamp(18px, 3vw, 26px);
+}
+
+.rental-card-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.rental-card-heading h2,
+.payment-panel h2 {
+  margin: 4px 0 6px;
+  color: #294537;
+}
+
+.rental-card-heading p,
+.payment-panel > p,
+.checkout-location {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.rental-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin: 18px 0;
+  color: #355c49;
+  font-weight: 700;
+}
+
+.rental-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.checkout-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+  align-items: start;
+  gap: 20px;
+}
+
+.checkout-price {
+  margin: 18px 0 12px;
+  color: #234738;
+  font-size: 1.8rem;
+  font-weight: 850;
+}
+
+.checkout-price small {
+  color: var(--muted);
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.checkout-form {
+  display: grid;
+  gap: 16px;
+  margin-top: 22px;
+}
+
+.checkout-form small {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.checkout-steps .payment-steps {
+  margin: 18px 0;
+}
+
+.invoice-list {
+  display: grid;
+  margin-top: 18px;
+}
+
+.invoice-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 0;
+  border-top: 1px solid rgba(76, 93, 83, 0.12);
+}
+
+.invoice-row > div strong,
+.invoice-row > div span {
+  display: block;
+}
+
+.invoice-row > div span {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.invoice-status {
+  border-radius: 999px;
+  padding: 0.45rem 0.7rem;
+  background: #fff2d6;
+  color: #745a1c;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.invoice-status.paid {
+  background: #e2f5e7;
+  color: #286044;
+}
+
+.pix-page {
+  display: grid;
+  justify-items: center;
+}
+
+.pix-panel {
+  display: grid;
+  justify-items: center;
+  width: min(100%, 560px);
+  gap: 14px;
+  text-align: center;
+}
+
+.pix-panel p {
+  margin: 0;
+}
+
+.pix-code-image {
+  width: min(100%, 280px);
+  aspect-ratio: 1;
+  object-fit: contain;
+  border-radius: 14px;
+  background: white;
+}
+
+.pix-panel label {
+  justify-self: stretch;
+  text-align: left;
+  font-weight: 700;
+}
+
+.pix-panel textarea {
+  width: 100%;
+  min-height: 96px;
+  resize: vertical;
+  border: 1px solid rgba(47, 69, 59, 0.16);
+  border-radius: 12px;
+  padding: 12px;
+  color: var(--text);
+  font: inherit;
+}
+
+.pix-panel #copy-pix-status {
+  min-height: 1.4em;
+  color: #355c49;
+}
+
+@media (max-width: 700px) {
+  .payment-wallet-form,
+  .checkout-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .payment-wallet-form .btn {
+    width: 100%;
+  }
+
+  .invoice-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .invoice-row .btn {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 480px) {
+  .payment-page {
+    margin-top: 22px;
+  }
+
+  .rental-card-heading {
+    flex-direction: column;
+  }
+
+  .rental-card-actions,
+  .rental-card-actions .btn {
+    width: 100%;
+  }
+}

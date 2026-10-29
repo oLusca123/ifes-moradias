@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Meus aluguéis | Moradia IFES</title>
+    <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+    <div class="page-shell payment-shell">
+        <header class="topbar">
+            <a href="/moradias" class="brand"><img class="brand-logo" src="/logo-moradia-ifes.png" alt="" /><span>Moradia IFES</span></a>
+            <div class="topbar-actions">
+                <a class="btn btn-ghost" href="/perfil">Minha conta</a>
+                <a class="btn btn-primary" href="/moradias">Explorar moradias</a>
+            </div>
+        </header>
+
+        <main class="payment-page">
+            <section class="payment-page-heading">
+                <span class="guide-eyebrow">ALUGUEL NA PLATAFORMA</span>
+                <h1>Meus aluguéis</h1>
+                <p>Acompanhe contratos e cobranças mensais. A confirmação de pagamento chega pelo Asaas.</p>
+            </section>
+
+            <% if (erro) { %><div class="listing-error" role="alert"><%= erro %></div><% } %>
+            <% if (!asaasConfigurado) { %>
+                <div class="payment-setup-warning">Pagamentos online ainda não estão ativados pelo administrador da plataforma. Nenhuma cobrança será simulada. Consulte o passo a passo de configuração na sua <a href="/perfil">página de perfil</a>.</div>
+            <% } %>
+
+            <% if (locacoes.length === 0) { %>
+                <section class="payment-empty">
+                    <span aria-hidden="true">⌂</span>
+                    <h2>Você ainda não tem aluguéis cadastrados</h2>
+                    <p>Quando um contrato mensal for criado, as cobranças e os recibos aparecerão aqui.</p>
+                    <a class="btn btn-primary" href="/moradias">Encontrar uma moradia</a>
+                </section>
+            <% } else { %>
+                <div class="rental-list">
+                    <% locacoes.forEach((locacao) => {
+                        const moradia = moradias.find((item) => item.id === locacao.moradiaId);
+                        const outraPessoaId = usuarioId === locacao.locatarioId ? locacao.proprietarioId : locacao.locatarioId;
+                        const outraPessoa = pessoas.find((item) => item.id === outraPessoaId);
+                        const meusPagamentos = pagamentos.filter((item) => item.locacaoId === locacao.id);
+                    %>
+                        <article class="rental-card">
+                            <div class="rental-card-heading">
+                                <div>
+                                    <span class="step-kicker"><%= usuarioId === locacao.locatarioId ? 'VOCÊ É LOCATÁRIO' : 'VOCÊ É PROPRIETÁRIO' %></span>
+                                    <h2><%= moradia ? moradia.titulo : 'Moradia' %></h2>
+                                    <p><%= outraPessoa ? outraPessoa.nome : 'Participante do contrato' %> · <%= moradia ? moradia.bairro : '' %></p>
+                                </div>
+                                <strong class="status"><%= locacao.status === 'ATIVA' ? 'Contrato ativo' : locacao.status %></strong>
+                            </div>
+                            <div class="rental-card-meta">
+                                <span>R$ <%= Number(locacao.valorMensal).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) %> / mês</span>
+                                <span><%= meusPagamentos.length %> cobrança(s) registrada(s)</span>
+                            </div>
+                            <div class="rental-card-actions">
+                                <a class="btn btn-primary" href="/alugueis/<%= locacao.id %>">Ver contrato e pagamentos</a>
+                                <% if (moradia) { %><a class="btn btn-ghost" href="/moradias/<%= moradia.id %>">Ver anúncio</a><% } %>
+                            </div>
+                        </article>
+                    <% }) %>
+                </div>
+            <% } %>
+        </main>
+    </div>
+</body>
+</html>

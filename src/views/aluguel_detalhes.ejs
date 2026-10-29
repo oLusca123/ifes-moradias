@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Detalhes do aluguel | Moradia IFES</title>
+    <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+    <div class="page-shell payment-shell">
+        <header class="topbar">
+            <a href="/moradias" class="brand"><img class="brand-logo" src="/logo-moradia-ifes.png" alt="" /><span>Moradia IFES</span></a>
+            <div class="topbar-actions"><a class="btn btn-ghost" href="/alugueis">Meus aluguéis</a><a class="btn btn-ghost" href="/perfil">Minha conta</a></div>
+        </header>
+        <main class="payment-page">
+            <section class="payment-page-heading">
+                <span class="guide-eyebrow">GERENCIAR ALUGUEL</span>
+                <h1><%= moradia ? moradia.titulo : 'Contrato de aluguel' %></h1>
+                <p>Contrato mensal · R$ <%= Number(locacao.valorMensal).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) %> · Status: <strong><%= locacao.status %></strong></p>
+            </section>
+            <% if (!asaasConfigurado) { %><div class="payment-setup-warning">A integração do Asaas está desativada no servidor; pagamentos não podem ser consultados ou cobrados.</div><% } %>
+            <section class="payment-panel">
+                <div class="rental-card-heading">
+                    <div><h2>Mensalidades</h2><p>O status é atualizado pelas notificações seguras do Asaas.</p></div>
+                    <% if (moradia) { %><a class="btn btn-ghost" href="/moradias/<%= moradia.id %>">Ver imóvel</a><% } %>
+                </div>
+                <% if (pagamentos.length === 0) { %>
+                    <div class="payment-empty compact"><p>A primeira cobrança ainda não foi gerada pelo Asaas. Atualize esta página em instantes ou contate o suporte da plataforma.</p></div>
+                <% } else { %>
+                    <div class="invoice-list">
+                        <% pagamentos.forEach((pagamento) => { %>
+                            <article class="invoice-row">
+                                <div><strong>R$ <%= Number(pagamento.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) %></strong><span>Vencimento: <%= pagamento.vencimento || 'Não informado' %></span></div>
+                                <span class="invoice-status <%= ['RECEIVED', 'CONFIRMED'].includes(pagamento.status) ? 'paid' : '' %>"><%= pagamento.status %></span>
+                                <% if (locatario && ['PENDING', 'OVERDUE', 'AWAITING_RISK_ANALYSIS'].includes(pagamento.status)) { %>
+                                    <a class="btn btn-primary" href="/alugueis/pagamento/<%= pagamento.id %>/pix">Pagar com Pix</a>
+                                <% } %>
+                            </article>
+                        <% }) %>
+                    </div>
+                <% } %>
+            </section>
+        </main>
+    </div>
+</body>
+</html>

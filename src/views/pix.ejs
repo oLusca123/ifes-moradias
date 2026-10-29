@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pagar aluguel com Pix | Moradia IFES</title>
+    <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+    <div class="page-shell payment-shell">
+        <header class="topbar">
+            <a href="/moradias" class="brand"><img class="brand-logo" src="/logo-moradia-ifes.png" alt="" /><span>Moradia IFES</span></a>
+            <div class="topbar-actions"><a class="btn btn-ghost" href="/alugueis">Meus aluguéis</a></div>
+        </header>
+        <main class="payment-page pix-page">
+            <section class="payment-panel pix-panel">
+                <span class="guide-eyebrow"><%= manual ? 'PAGAMENTO MANUAL COM PIX' : 'PAGAMENTO PROTEGIDO PELO ASAAS' %></span>
+                <h1>Pague com Pix</h1>
+                <p>Valor total: <strong>R$ <%= Number(pagamento.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) %></strong></p>
+                <% if (manual) { %>
+                    <div class="payment-breakdown compact">
+                        <div><span>Valor anunciado</span><strong>R$ <%= Number((pagamento.valor / 1.01)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) %></strong></div>
+                        <div><span>Taxa da plataforma</span><strong>R$ <%= Number((pagamento.valor - (pagamento.valor / 1.01))).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) %></strong></div>
+                        <div><span>Resto para o dono</span><strong>R$ <%= Number((pagamento.valor / 1.01)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) %></strong></div>
+                    </div>
+                    <p class="payment-setup-warning">A plataforma recebe 1% do valor anunciado e o restante vai para o proprietário. A chave Pix da plataforma é <strong>27996568893</strong>.</p>
+                    <label for="pix-copy-value">Chave Pix da plataforma</label>
+                    <textarea id="pix-copy-value" readonly>Chave Pix: 27996568893
+Valor total do aluguel: R$ <%= Number(pagamento.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) %>
+Taxa da plataforma (1%): R$ <%= Number((pagamento.valor - (pagamento.valor / 1.01))).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) %>
+Valor repassado ao proprietário: R$ <%= Number((pagamento.valor / 1.01)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) %>
+Observação: o pagamento deve ser confirmado pelo proprietário e pela plataforma.</textarea>
+                <% } else { %>
+                    <img class="pix-code-image" src="data:image/png;base64,<%= pix.encodedImage %>" alt="QR Code Pix da cobrança" />
+                    <label for="pix-copy-value">Pix copia e cola</label>
+                    <textarea id="pix-copy-value" readonly><%= pix.payload %></textarea>
+                    <% if (pix.expirationDate) { %><small>Válido até <%= pix.expirationDate %>.</small><% } %>
+                <% } %>
+                <button class="btn btn-primary" id="copy-pix" type="button">Copiar código Pix</button>
+                <p id="copy-pix-status" role="status" aria-live="polite"></p>
+                <a class="btn btn-ghost" href="/alugueis">Voltar aos meus aluguéis</a>
+            </section>
+        </main>
+    </div>
+    <script>
+        document.querySelector('#copy-pix').addEventListener('click', async () => {
+            const value = document.querySelector('#pix-copy-value').value;
+            try {
+                await navigator.clipboard.writeText(value);
+                document.querySelector('#copy-pix-status').textContent = 'Código Pix copiado.';
+            } catch {
+                const field = document.querySelector('#pix-copy-value');
+                field.focus();
+                field.select();
+                document.querySelector('#copy-pix-status').textContent = 'Selecione e copie o código Pix.';
+            }
+        });
+    </script>
+</body>
+</html>

@@ -211,6 +211,23 @@
                             <span aria-hidden="true">✓</span>
                             <p>Ao publicar, seu imóvel ficará visível para estudantes e servidores que procuram moradia perto do IFES Campus Santa Teresa.</p>
                         </div>
+
+                        <div class="payment-wallet-guide listing-wallet-guide">
+                            <h3>Antes de publicar: cadastre seu recebimento no Asaas</h3>
+                            <p>O site usa o <strong>Wallet ID</strong> para direcionar a parte do aluguel destinada ao proprietário. A chave Pix cadastrada no Asaas é usada pelo próprio Asaas para movimentar valores da sua conta; não substitui o Wallet ID.</p>
+                            <ol>
+                                <li>Crie uma conta Asaas como proprietário em <a href="https://www.asaas.com/" target="_blank" rel="noopener noreferrer">asaas.com</a> e conclua o cadastro e a validação solicitados pelo provedor.</li>
+                                <li>No painel do Asaas, configure uma conta bancária ou chave Pix para movimentar os valores recebidos. Os nomes e a localização dos menus podem variar conforme o tipo e a situação da conta; use a Central de Ajuda do Asaas se não encontrar essa opção.</li>
+                                <li>Localize o <strong>Wallet ID</strong> da carteira de recebimento. Consulte a <a href="https://docs.asaas.com/reference/recuperar-walletid" target="_blank" rel="noopener noreferrer">documentação oficial para recuperar o Wallet ID</a>. Copie o identificador completo.</li>
+                                <li>Abra <strong>Meu perfil → Configure seus recebimentos de aluguel</strong>, cole o Wallet ID e salve. Não cole aqui sua chave Pix, senha ou chave API.</li>
+                                <li>Volte a este formulário e publique o imóvel. A cobrança online só ficará disponível quando a plataforma também tiver a integração Asaas ativada e a conta estiver apta a receber split.</li>
+                            </ol>
+                            <p class="wallet-legend">Importante: a chave API é exclusiva do servidor da plataforma. O proprietário não precisa criar nem compartilhar uma chave API; o locatário também não precisa. O proprietário precisa somente da conta Asaas validada e do Wallet ID cadastrado no perfil.</p>
+                            <% if (typeof asaasConfigurado !== 'undefined' && !asaasConfigurado) { %>
+                                <p class="payment-setup-warning">A integração de pagamentos ainda não está ativada no servidor. Você pode publicar o anúncio, mas não será possível criar cobranças online até a plataforma configurar as credenciais e o webhook.</p>
+                            <% } %>
+                            <a class="btn btn-secondary" href="/perfil">Abrir configuração de recebimentos no perfil</a>
+                        </div>
                     </section>
 
                     <div class="listing-form-footer">
