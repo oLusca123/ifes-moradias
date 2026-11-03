@@ -46,7 +46,7 @@ export class Moradia {
     @Column()
     imagem!: string;
 
-    @Column({ type: "blob", nullable: true, select: false })
+    @Column({ type: process.env.DATABASE_URL ? "bytea" : "blob", nullable: true, select: false })
     imagemDados!: Buffer | null;
 
     @Column({ type: "text", nullable: true })

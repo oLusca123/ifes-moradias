@@ -34,7 +34,7 @@ export class Usuario {
     })
     tipo!: TipoUsuario;
 
-    @Column({ type: "blob", nullable: true, select: false })
+    @Column({ type: process.env.DATABASE_URL ? "bytea" : "blob", nullable: true, select: false })
     fotoDados!: Buffer | null;
 
     @Column({ type: "text", nullable: true })

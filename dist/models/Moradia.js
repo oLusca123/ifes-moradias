@@ -67,7 +67,7 @@ __decorate([
     __metadata("design:type", String)
 ], Moradia.prototype, "imagem", void 0);
 __decorate([
-    (0, typeorm_1.Column)({ type: "blob", nullable: true, select: false }),
+    (0, typeorm_1.Column)({ type: process.env.DATABASE_URL ? "bytea" : "blob", nullable: true, select: false }),
     __metadata("design:type", Object)
 ], Moradia.prototype, "imagemDados", void 0);
 __decorate([

@@ -101,15 +101,15 @@ __decorate([
     __metadata("design:type", Object)
 ], AsaasWebhookEvent.prototype, "paymentId", void 0);
 __decorate([
-    (0, typeorm_1.Column)({ type: "datetime" }),
+    (0, typeorm_1.Column)({ type: process.env.DATABASE_URL ? "timestamptz" : "datetime" }),
     __metadata("design:type", Date)
 ], AsaasWebhookEvent.prototype, "receivedAt", void 0);
 __decorate([
-    (0, typeorm_1.Column)({ type: "datetime", nullable: true }),
+    (0, typeorm_1.Column)({ type: process.env.DATABASE_URL ? "timestamptz" : "datetime", nullable: true }),
     __metadata("design:type", Object)
 ], AsaasWebhookEvent.prototype, "processingStartedAt", void 0);
 __decorate([
-    (0, typeorm_1.Column)({ type: "datetime", nullable: true }),
+    (0, typeorm_1.Column)({ type: process.env.DATABASE_URL ? "timestamptz" : "datetime", nullable: true }),
     __metadata("design:type", Object)
 ], AsaasWebhookEvent.prototype, "processedAt", void 0);
 __decorate([

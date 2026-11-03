@@ -48,7 +48,7 @@ __decorate([
     __metadata("design:type", String)
 ], Usuario.prototype, "tipo", void 0);
 __decorate([
-    (0, typeorm_1.Column)({ type: "blob", nullable: true, select: false }),
+    (0, typeorm_1.Column)({ type: process.env.DATABASE_URL ? "bytea" : "blob", nullable: true, select: false }),
     __metadata("design:type", Object)
 ], Usuario.prototype, "fotoDados", void 0);
 __decorate([

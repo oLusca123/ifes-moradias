@@ -64,13 +64,13 @@ export class AsaasWebhookEvent {
     @Column({ type: "text", nullable: true })
     paymentId!: string | null;
 
-    @Column({ type: "datetime" })
+    @Column({ type: process.env.DATABASE_URL ? "timestamptz" : "datetime" })
     receivedAt!: Date;
 
-    @Column({ type: "datetime", nullable: true })
+    @Column({ type: process.env.DATABASE_URL ? "timestamptz" : "datetime", nullable: true })
     processingStartedAt!: Date | null;
 
-    @Column({ type: "datetime", nullable: true })
+    @Column({ type: process.env.DATABASE_URL ? "timestamptz" : "datetime", nullable: true })
     processedAt!: Date | null;
 
     @Column({ default: "PROCESSING" })
