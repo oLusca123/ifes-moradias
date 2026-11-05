@@ -14,6 +14,7 @@ process.env.ASAAS_ENVIRONMENT = 'sandbox';
 process.env.ASAAS_WEBHOOK_TOKEN = 'webhook-token';
 
 const { getPaymentStatus, canTransitionPaymentStatus } = require('../dist/services/AsaasPaymentState.js');
+const { asaasRequest, AsaasApiError } = require('../dist/services/AsaasService.js');
 const { BancoDeDados } = require('../dist/services/BDConn.js');
 const { router } = require('../dist/routers.js');
 const { LocacaoController } = require('../dist/controllers/LocacaoController.js');
@@ -76,6 +77,71 @@ test('rental pricing remains consistent with the current business rule', () => {
   assert.equal(result.valorAnunciado, 100);
   assert.equal(result.taxaPlataforma, 1);
   assert.equal(result.valorParaDono, 100);
+});
+
+test('Asaas validation errors log only safe metadata and codes', async () => {
+  const originalFetch = global.fetch;
+  const originalConsoleError = console.error;
+  const logEntries = [];
+  const sensitiveValues = [
+    'Sensitive Test Name',
+    'private.test@example.com',
+    '52998224725',
+    'wallet_secret_123',
+    'api_key_secret_456',
+    'private-webhook-token'
+  ];
+
+  global.fetch = async () => ({
+    ok: false,
+    status: 400,
+    json: async () => ({
+      errors: [
+        {
+          code: 'invalid_split_wallet',
+          description: `Validation failed for ${sensitiveValues.join(' ')}`
+        },
+        { code: 'bad-value', description: 'Value invalid' },
+        { code: `invalid-${sensitiveValues[0]}`, description: 'Unsafe code' },
+        { code: 'missing-description' }
+      ]
+    })
+  });
+  console.error = (...args) => logEntries.push(args.map((arg) =>
+    typeof arg === 'string' ? arg : JSON.stringify(arg)
+  ).join(' '));
+
+  try {
+    await assert.rejects(
+      asaasRequest('/subscriptions?externalReference=private-reference', {
+        method: 'POST',
+        body: { name: sensitiveValues[0], cpfCnpj: sensitiveValues[2] }
+      }),
+      (error) => {
+        assert.ok(error instanceof AsaasApiError);
+        assert.equal(error.message, 'O Asaas não conseguiu concluir a solicitação.');
+        assert.equal(error.status, 400);
+        assert.equal(error.ambiguous, false);
+        assert.deepEqual(error.validationCodes, ['invalid_split_wallet', 'bad-value', 'missing-description']);
+        return true;
+      }
+    );
+
+    assert.equal(logEntries.length, 1);
+    const log = logEntries[0];
+    assert.match(log, /POST/);
+    assert.match(log, /\/subscriptions/);
+    assert.match(log, /400/);
+    assert.match(log, /invalid_split_wallet/);
+    assert.match(log, /bad-value/);
+    assert.match(log, /missing-description/);
+    for (const sensitiveValue of [...sensitiveValues, 'private-reference', 'Validation failed', 'Value invalid']) {
+      assert.equal(log.includes(sensitiveValue), false, `log must not include ${sensitiveValue}`);
+    }
+  } finally {
+    global.fetch = originalFetch;
+    console.error = originalConsoleError;
+  }
 });
 
 test('sandbox subscription and Pix QR flow uses mocked Asaas responses only', async () => {
