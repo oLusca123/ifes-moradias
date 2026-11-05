@@ -1,10 +1,17 @@
 import { Request, Response } from "express";
 import { randomUUID, timingSafeEqual } from "crypto";
-import { In } from "typeorm";
+import { EntityManager, In } from "typeorm";
 import { BancoDeDados } from "../services/BDConn";
-import { AsaasWebhookEvent, Locacao, PagamentoAluguel } from "../models/Locacao";
+import { AsaasWebhookEvent, Locacao, LocacaoOperacao, PagamentoAluguel } from "../models/Locacao";
 import { Moradia } from "../models/Moradia";
 import { Usuario } from "../models/Usuario";
+import { AsaasApiError, asaasRequest, isAsaasConfigured } from "../services/AsaasService";
+import {
+    canTransitionPaymentStatus,
+    getPaymentStatus,
+    isValidCpfCnpj,
+    PaymentStatus
+} from "../services/AsaasPaymentState";
 
 type AsaasPayment = {
     id: string;
@@ -12,19 +19,31 @@ type AsaasPayment = {
     dueDate?: string;
     status?: string;
     subscription?: string;
+    externalReference?: string;
 };
 
-type AsaasResponse<T> = T & { errors?: Array<{ description?: string }> };
-type PaymentEventStatus = "PENDING" | "OVERDUE" | "RECEIVED" | "DELETED" | "PARTIALLY_REFUNDED" | "REFUNDED";
-
-const paymentStatusTransitions: Record<PaymentEventStatus, PaymentEventStatus[]> = {
-    PENDING: ["PENDING", "OVERDUE", "RECEIVED", "DELETED", "PARTIALLY_REFUNDED", "REFUNDED"],
-    OVERDUE: ["OVERDUE", "RECEIVED", "DELETED", "PARTIALLY_REFUNDED", "REFUNDED"],
-    RECEIVED: ["RECEIVED", "PARTIALLY_REFUNDED", "REFUNDED"],
-    DELETED: ["DELETED"],
-    PARTIALLY_REFUNDED: ["PARTIALLY_REFUNDED", "REFUNDED"],
-    REFUNDED: ["REFUNDED"]
+type AsaasList<T> = {
+    data: T[];
+    hasMore?: boolean;
 };
+
+type StoredWebhook = {
+    event: string;
+    payment?: AsaasPayment;
+    subscription?: {
+        id: string;
+        status?: string;
+        externalReference?: string;
+        customer?: string;
+    };
+};
+
+const subscriptionEventTypes = new Set([
+    "SUBSCRIPTION_CREATED",
+    "SUBSCRIPTION_UPDATED",
+    "SUBSCRIPTION_DELETED",
+    "SUBSCRIPTION_INACTIVATED"
+]);
 
 export class LocacaoController {
     static calcularCobranca(valorCobrado: number) {
@@ -40,34 +59,6 @@ export class LocacaoController {
             valorParaDono,
             chavePixPlataforma: "27996568893"
         };
-    }
-
-    private static apiBase() {
-        return process.env.ASAAS_ENVIRONMENT === "production"
-            ? "https://api.asaas.com/v3"
-            : "https://api-sandbox.asaas.com/v3";
-    }
-
-    private static async asaas<T>(path: string, method = "GET", body?: unknown): Promise<T> {
-        const apiKey = process.env.ASAAS_API_KEY;
-        if (!apiKey) {
-            throw new Error("Os pagamentos ainda não foram ativados pela plataforma.");
-        }
-
-        const response = await fetch(`${LocacaoController.apiBase()}${path}`, {
-            method,
-            headers: {
-                "Content-Type": "application/json",
-                "access_token": apiKey
-            },
-            body: body === undefined ? undefined : JSON.stringify(body)
-        });
-        const result = await response.json() as AsaasResponse<T>;
-        if (!response.ok) {
-            const message = result.errors?.map((error) => error.description).filter(Boolean).join(" ");
-            throw new Error(message || "O Asaas não conseguiu processar a solicitação.");
-        }
-        return result;
     }
 
     static async dashboard(req: Request, res: Response) {
@@ -98,7 +89,7 @@ export class LocacaoController {
                 moradias,
                 pessoas,
                 usuarioId: locatarioId,
-                asaasConfigurado: Boolean(process.env.ASAAS_API_KEY),
+                asaasConfigurado: isAsaasConfigured(),
                 erro: req.query.erro === "1" ? "Não foi possível concluir a operação. Confira o cadastro de pagamento e tente novamente." : null
             });
         } catch (error) {
@@ -120,7 +111,7 @@ export class LocacaoController {
             if (!proprietario) {
                 return res.status(409).render("pagamento", {
                     moradia,
-                    asaasConfigurado: Boolean(process.env.ASAAS_API_KEY),
+                    asaasConfigurado: isAsaasConfigured(),
                     erro: "O proprietário ainda precisa concluir o cadastro de recebimento."
                 });
             }
@@ -135,7 +126,7 @@ export class LocacaoController {
             const valorCobrado = Number(moradia.preco) * 1.01;
             return res.render("pagamento", {
                 moradia,
-                asaasConfigurado: Boolean(process.env.ASAAS_API_KEY),
+                asaasConfigurado: isAsaasConfigured(),
                 erro: null,
                 breakdown: LocacaoController.calcularCobranca(valorCobrado),
                 chavePixPlataforma: "27996568893"
@@ -149,6 +140,7 @@ export class LocacaoController {
     static async createRental(req: Request, res: Response) {
         const locatarioId = Number((req.session as any).usuarioId);
         const moradiaId = Number(req.params.moradiaId);
+        let operation: LocacaoOperacao | null = null;
         try {
             const moradia = await BancoDeDados.getRepository(Moradia).findOne({ where: { id: moradiaId } });
             if (!moradia || moradia.demonstracao || !moradia.disponivel || !moradia.proprietarioId) {
@@ -171,81 +163,315 @@ export class LocacaoController {
             if (!locatario) {
                 return res.status(409).send("Usuário locatário não encontrado.");
             }
-            if (process.env.ASAAS_API_KEY && !proprietario?.asaasWalletId) {
-                return res.status(409).render("pagamento", {
+            if (!isAsaasConfigured()) {
+                return LocacaoController.renderCheckoutError(
+                    res,
                     moradia,
-                    asaasConfigurado: Boolean(process.env.ASAAS_API_KEY),
-                    erro: "O cadastro de recebimento do proprietário está incompleto."
-                });
+                    "Os pagamentos online ainda não estão ativos. Nenhuma cobrança foi criada.",
+                    503
+                );
             }
-            if (!cpf || !/^\d{11}$|^\d{14}$/.test(cpf)) {
-                return res.status(400).render("pagamento", {
+            if (!proprietario?.asaasWalletId) {
+                return LocacaoController.renderCheckoutError(
+                    res,
                     moradia,
-                    asaasConfigurado: Boolean(process.env.ASAAS_API_KEY),
-                    erro: "Informe um CPF ou CNPJ válido para gerar as cobranças."
-                });
+                    "O cadastro de recebimento do proprietário está incompleto.",
+                    409
+                );
+            }
+            if (!isValidCpfCnpj(cpf)) {
+                return LocacaoController.renderCheckoutError(
+                    res,
+                    moradia,
+                    "Informe um CPF ou CNPJ válido para gerar as cobranças.",
+                    400
+                );
             }
 
             const valorCobrado = Number(moradia.preco) * 1.01;
-            if (!process.env.ASAAS_API_KEY) {
-                return res.status(503).render("pagamento", {
-                    moradia,
-                    asaasConfigurado: false,
-                    erro: "Os pagamentos online ainda não estão ativos. Nenhuma cobrança foi criada; tente novamente quando a integração estiver configurada."
-                });
+            operation = await LocacaoController.getOrCreateOperation(
+                moradia,
+                locatarioId,
+                proprietario.id,
+                valorCobrado
+            );
+            if (operation.locacaoId) {
+                return res.redirect(`/alugueis/${operation.locacaoId}`);
             }
 
-            const breakdown = LocacaoController.calcularCobranca(valorCobrado);
-            const customer = await LocacaoController.asaas<{ id: string }>("/customers", "POST", {
-                name: locatario.nome,
-                email: locatario.email,
-                cpfCnpj: cpf,
-                phone: locatario.telefone || undefined
+            const operationRepo = BancoDeDados.getRepository(LocacaoOperacao);
+            const now = new Date();
+            const claim = await operationRepo.createQueryBuilder()
+                .update(LocacaoOperacao)
+                .set({
+                    status: "PROCESSANDO",
+                    lockedUntil: new Date(now.getTime() + 2 * 60 * 1000),
+                    lastError: null,
+                    updatedAt: now
+                })
+                .where("id = :id", { id: operation.id })
+                .andWhere("(status <> :processing OR lockedUntil IS NULL OR lockedUntil < :now)", {
+                    processing: "PROCESSANDO",
+                    now
+                })
+                .andWhere("status IN (:...statuses)", {
+                    statuses: ["PENDENTE", "PROCESSANDO", "RECONCILIACAO_NECESSARIA", "FALHA"]
+                })
+                .execute();
+
+            if (claim.affected !== 1) {
+                const current = await operationRepo.findOneByOrFail({ id: operation.id });
+                if (current.locacaoId) return res.redirect(`/alugueis/${current.locacaoId}`);
+                return LocacaoController.renderCheckoutError(
+                    res,
+                    moradia,
+                    current.status === "PROCESSANDO"
+                        ? "Sua contratação já está sendo processada. Aguarde alguns instantes e atualize a página antes de tentar novamente."
+                        : "Esta contratação precisa ser reconciliada antes de uma nova tentativa. Atualize a página em instantes.",
+                    202
+                );
+            }
+
+            operation = await operationRepo.findOneByOrFail({ id: operation.id });
+            let customerId = operation.asaasCustomerId;
+            let subscriptionId = operation.asaasSubscriptionId;
+
+            if (!customerId) {
+                const customers = await LocacaoController.findByExternalReference<{ id: string }>(
+                    "/customers",
+                    `${operation.reference}-customer`
+                );
+                if (customers.length > 1) {
+                    return LocacaoController.releaseOperation(
+                        res, operation, moradia,
+                        "Foram encontradas várias contas vinculadas a esta tentativa. A contratação foi pausada para conferência.",
+                        "RECONCILIACAO_NECESSARIA", 409
+                    );
+                }
+                if (customers.length === 1) {
+                    customerId = customers[0].id;
+                    operation = await LocacaoController.updateOperationStage(
+                        operation,
+                        { asaasCustomerId: customerId, stage: "SUBSCRIPTION_READY" }
+                    );
+                } else if (operation.stage === "CUSTOMER_CREATE_UNKNOWN") {
+                    return LocacaoController.releaseOperation(
+                        res, operation, moradia,
+                        "Ainda não foi possível confirmar a criação da conta no Asaas. A tentativa foi preservada para evitar duplicidade; tente novamente mais tarde.",
+                        "RECONCILIACAO_NECESSARIA", 202
+                    );
+                } else if (operation.stage === "CUSTOMER_READY") {
+                    const advanced = await operationRepo.createQueryBuilder()
+                        .update(LocacaoOperacao)
+                        .set({ stage: "CUSTOMER_CREATE_UNKNOWN", updatedAt: new Date() })
+                        .where("id = :id AND stage = :stage", { id: operation.id, stage: "CUSTOMER_READY" })
+                        .execute();
+                    if (advanced.affected !== 1) {
+                        operation = await operationRepo.findOneByOrFail({ id: operation.id });
+                        return LocacaoController.releaseOperation(
+                            res, operation, moradia,
+                            "A contratação foi alterada por outra solicitação. Atualize a página para conferir o status.",
+                            "RECONCILIACAO_NECESSARIA", 202
+                        );
+                    }
+
+                    try {
+                        const customer = await asaasRequest<{ id: string }>("/customers", {
+                            method: "POST",
+                            body: {
+                                name: locatario.nome,
+                                email: locatario.email,
+                                cpfCnpj: cpf,
+                                phone: locatario.telefone || undefined,
+                                externalReference: `${operation.reference}-customer`
+                            }
+                        });
+                        customerId = customer.id;
+                        operation = await LocacaoController.updateOperationStage(
+                            operation,
+                            { asaasCustomerId: customerId, stage: "SUBSCRIPTION_READY" },
+                            "CUSTOMER_CREATE_UNKNOWN"
+                        );
+                    } catch (error) {
+                        if (error instanceof AsaasApiError && !error.ambiguous) {
+                            operation = await LocacaoController.updateOperationStage(
+                                operation,
+                                { stage: "CUSTOMER_READY" },
+                                "CUSTOMER_CREATE_UNKNOWN"
+                            );
+                        }
+                        throw error;
+                    }
+                } else {
+                    return LocacaoController.releaseOperation(
+                        res, operation, moradia,
+                        "A conta do pagador ainda não foi confirmada. Nenhuma nova conta será criada automaticamente.",
+                        "RECONCILIACAO_NECESSARIA", 202
+                    );
+                }
+            }
+
+            if (!subscriptionId) {
+                operation = await operationRepo.findOneByOrFail({ id: operation.id });
+                const subscriptions = await LocacaoController.findByExternalReference<{ id: string }>(
+                    "/subscriptions",
+                    operation.reference
+                );
+                if (subscriptions.length > 1) {
+                    return LocacaoController.releaseOperation(
+                        res, operation, moradia,
+                        "Foram encontradas várias assinaturas vinculadas a esta tentativa. A contratação foi pausada para conferência.",
+                        "RECONCILIACAO_NECESSARIA", 409
+                    );
+                }
+                if (subscriptions.length === 1) {
+                    subscriptionId = subscriptions[0].id;
+                } else if (operation.stage === "SUBSCRIPTION_CREATE_UNKNOWN") {
+                    return LocacaoController.releaseOperation(
+                        res, operation, moradia,
+                        "Ainda não foi possível confirmar a assinatura no Asaas. A tentativa foi preservada para evitar cobranças duplicadas; tente novamente mais tarde.",
+                        "RECONCILIACAO_NECESSARIA", 202
+                    );
+                } else if (operation.stage === "SUBSCRIPTION_READY") {
+                    const advanced = await operationRepo.createQueryBuilder()
+                        .update(LocacaoOperacao)
+                        .set({ stage: "SUBSCRIPTION_CREATE_UNKNOWN", updatedAt: new Date() })
+                        .where("id = :id AND stage = :stage", { id: operation.id, stage: "SUBSCRIPTION_READY" })
+                        .execute();
+                    if (advanced.affected !== 1) {
+                        operation = await operationRepo.findOneByOrFail({ id: operation.id });
+                        return LocacaoController.releaseOperation(
+                            res, operation, moradia,
+                            "A contratação foi alterada por outra solicitação. Atualize a página para conferir o status.",
+                            "RECONCILIACAO_NECESSARIA", 202
+                        );
+                    }
+
+                    const due = new Date();
+                    due.setDate(due.getDate() + 1);
+                    const nextDueDate = `${due.getFullYear()}-${String(due.getMonth() + 1).padStart(2, "0")}-${String(due.getDate()).padStart(2, "0")}`;
+                    try {
+                        const subscription = await asaasRequest<{ id: string }>("/subscriptions", {
+                            method: "POST",
+                            body: {
+                                customer: customerId,
+                                billingType: "PIX",
+                                value: valorCobrado,
+                                nextDueDate,
+                                cycle: "MONTHLY",
+                                description: `Aluguel mensal com taxa da plataforma: ${moradia.titulo}`,
+                                externalReference: operation.reference,
+                                split: [{
+                                    walletId: proprietario.asaasWalletId,
+                                    percentualValue: 99
+                                }]
+                            }
+                        });
+                        subscriptionId = subscription.id;
+                    } catch (error) {
+                        if (error instanceof AsaasApiError && !error.ambiguous) {
+                            operation = await LocacaoController.updateOperationStage(
+                                operation,
+                                { stage: "SUBSCRIPTION_READY" },
+                                "SUBSCRIPTION_CREATE_UNKNOWN"
+                            );
+                        }
+                        throw error;
+                    }
+                } else if (operation.stage !== "LOCAL_PERSIST") {
+                    return LocacaoController.releaseOperation(
+                        res, operation, moradia,
+                        "A assinatura ainda não foi confirmada. Nenhuma nova cobrança será enviada até a reconciliação.",
+                        "RECONCILIACAO_NECESSARIA", 202
+                    );
+                }
+
+                if (subscriptionId) {
+                    operation = await LocacaoController.updateOperationStage(
+                        operation,
+                        { asaasSubscriptionId: subscriptionId, stage: "LOCAL_PERSIST" }
+                    );
+                }
+            }
+
+            if (!customerId || !subscriptionId) {
+                operation = await operationRepo.findOneByOrFail({ id: operation.id });
+                return LocacaoController.releaseOperation(
+                    res, operation, moradia,
+                    "A contratação ainda está sendo reconciliada com o Asaas. Nenhuma nova cobrança foi enviada.",
+                    "RECONCILIACAO_NECESSARIA", 202
+                );
+            }
+
+            const locacao = await BancoDeDados.transaction(async (manager) => {
+                const rentalRepo = manager.getRepository(Locacao);
+                const currentOperation = await manager.getRepository(LocacaoOperacao).findOneByOrFail({ id: operation!.id });
+                let rental = await rentalRepo.findOne({
+                    where: { locatarioId, moradiaId }
+                });
+                if (rental && rental.asaasSubscriptionId !== subscriptionId) {
+                    throw new Error("Já existe uma contratação diferente para este imóvel e locatário.");
+                }
+                if (!rental) {
+                    rental = rentalRepo.create({
+                        moradiaId,
+                        locatarioId,
+                        proprietarioId: proprietario.id,
+                        asaasCustomerId: customerId!,
+                        asaasSubscriptionId: subscriptionId!,
+                        asaasSubscriptionStatus: "ACTIVE",
+                        valorMensal: valorCobrado,
+                        status: "AGUARDANDO_PAGAMENTO"
+                    });
+                    rental = await rentalRepo.save(rental);
+                }
+                currentOperation.asaasCustomerId = customerId!;
+                currentOperation.asaasSubscriptionId = subscriptionId!;
+                currentOperation.locacaoId = rental.id;
+                currentOperation.status = rental.status;
+                currentOperation.stage = "COMPLETE";
+                currentOperation.lockedUntil = null;
+                currentOperation.lastError = null;
+                currentOperation.updatedAt = new Date();
+                await manager.getRepository(LocacaoOperacao).save(currentOperation);
+                return rental;
             });
 
-            const due = new Date();
-            due.setDate(due.getDate() + 1);
-            const nextDueDate = `${due.getFullYear()}-${String(due.getMonth() + 1).padStart(2, "0")}-${String(due.getDate()).padStart(2, "0")}`;
-            const subscription = await LocacaoController.asaas<{ id: string }>("/subscriptions", "POST", {
-                customer: customer.id,
-                billingType: "PIX",
-                value: valorCobrado,
-                nextDueDate,
-                cycle: "MONTHLY",
-                description: `Aluguel mensal com taxa da plataforma: ${moradia.titulo}`,
-                externalReference: `moradia-${moradia.id}-locatario-${locatarioId}`,
-                split: [{
-                    walletId: proprietario!.asaasWalletId,
-                    percentualValue: 99
-                }]
-            });
-
-            const locacao = locacaoRepo.create({
-                moradiaId: moradia.id,
-                locatarioId,
-                proprietarioId: proprietario!.id,
-                asaasCustomerId: customer.id,
-                asaasSubscriptionId: subscription.id,
-                valorMensal: valorCobrado,
-                status: "ATIVA"
-            });
-            await locacaoRepo.save(locacao);
-
-            const paymentList = await LocacaoController.asaas<{ data: AsaasPayment[] }>(
-                `/payments?subscription=${encodeURIComponent(subscription.id)}&limit=100`
-            );
-            await LocacaoController.savePayments(locacao.id, paymentList.data || []);
+            try {
+                const paymentList = await asaasRequest<AsaasList<AsaasPayment>>(
+                    `/subscriptions/${encodeURIComponent(subscriptionId)}/payments?limit=100`
+                );
+                await LocacaoController.savePayments(locacao.id, paymentList.data || []);
+            } catch (error) {
+                console.error("Não foi possível sincronizar as cobranças iniciais do Asaas; o webhook continuará sendo processado.", error);
+            }
 
             return res.redirect(`/alugueis/${locacao.id}`);
         } catch (error) {
-            console.error("Erro ao criar cobrança recorrente:", error);
+            console.error("Erro ao criar ou reconciliar cobrança recorrente:", error);
+            if (operation) {
+                const current = await BancoDeDados.getRepository(LocacaoOperacao).findOneBy({ id: operation.id });
+                if (current?.status === "PROCESSANDO") {
+                    const ambiguousStage = current.stage.endsWith("_CREATE_UNKNOWN");
+                    await LocacaoController.releaseOperationState(
+                        current,
+                        ambiguousStage ? "RECONCILIACAO_NECESSARIA" : "FALHA",
+                        error instanceof AsaasApiError && !error.ambiguous
+                            ? "O Asaas recusou a solicitação. Confira os dados e tente novamente."
+                            : "A resposta do Asaas não foi confirmada. A tentativa será reconciliada antes de novo envio."
+                    );
+                }
+            }
             const moradia = await BancoDeDados.getRepository(Moradia).findOne({ where: { id: moradiaId } });
             if (!moradia) return res.status(404).send("Imóvel não encontrado.");
-            return res.status(502).render("pagamento", {
+            return LocacaoController.renderCheckoutError(
+                res,
                 moradia,
-                asaasConfigurado: Boolean(process.env.ASAAS_API_KEY),
-                erro: error instanceof Error ? error.message : "Não foi possível gerar a cobrança."
-            });
+                error instanceof AsaasApiError
+                    ? error.message
+                    : "Não foi possível confirmar a contratação. Atualize a página antes de tentar novamente.",
+                error instanceof AsaasApiError && error.status && error.status < 500 ? 422 : 502
+            );
         }
     }
 
@@ -269,7 +495,7 @@ export class LocacaoController {
                 moradia,
                 pagamentos,
                 locatario: usuarioId === locacao.locatarioId,
-                asaasConfigurado: Boolean(process.env.ASAAS_API_KEY)
+                asaasConfigurado: isAsaasConfigured()
             });
         } catch (error) {
             console.error("Erro ao carregar aluguel:", error);
@@ -285,21 +511,24 @@ export class LocacaoController {
             const locacao = pagamento
                 ? await BancoDeDados.getRepository(Locacao).findOne({ where: { id: pagamento.locacaoId } })
                 : null;
-            if (!pagamento || !locacao || (locacao.locatarioId !== usuarioId && locacao.proprietarioId !== usuarioId)) {
+            if (!pagamento || !locacao || locacao.locatarioId !== usuarioId) {
                 return res.status(404).send("Cobrança não encontrada.");
             }
 
-            if (!process.env.ASAAS_API_KEY) {
+            if (!isAsaasConfigured()) {
                 return res.status(503).send("Os pagamentos online estão desativados. Nenhum QR Code Pix pode ser gerado.");
             }
+            if (["RECEIVED", "CONFIRMED", "PARTIALLY_REFUNDED", "REFUNDED"].includes(pagamento.status)) {
+                return res.status(409).send("Esta cobrança não está disponível para pagamento.");
+            }
 
-            const pix = await LocacaoController.asaas<{ encodedImage: string; payload: string; expirationDate?: string }>(
+            const pix = await asaasRequest<{ encodedImage: string; payload: string; expirationDate?: string }>(
                 `/payments/${encodeURIComponent(pagamento.asaasPaymentId)}/pixQrCode`
             );
             return res.render("pix", { pagamento, pix, manual: false });
         } catch (error) {
             console.error("Erro ao carregar QR Pix:", error);
-            return res.status(502).send(error instanceof Error ? error.message : "Não foi possível carregar o QR Pix.");
+            return res.status(502).send("Não foi possível carregar o QR Pix. Tente novamente mais tarde.");
         }
     }
 
@@ -457,13 +686,15 @@ export class LocacaoController {
     private static getWebhookPaymentStatus(
         eventType: string,
         paymentStatus?: string
-    ): PaymentEventStatus | null {
-        const statusByEvent: Record<string, PaymentEventStatus> = {
+    ): PaymentStatus | null {
+        const statusByEvent: Record<string, PaymentStatus> = {
             PAYMENT_CREATED: "PENDING",
-            PAYMENT_CONFIRMED: "RECEIVED",
+            PAYMENT_CONFIRMED: "CONFIRMED",
             PAYMENT_RECEIVED: "RECEIVED",
             PAYMENT_OVERDUE: "OVERDUE",
             PAYMENT_DELETED: "DELETED",
+            PAYMENT_CANCELED: "CANCELED",
+            PAYMENT_REFUND_IN_PROGRESS: "REFUND_IN_PROGRESS",
             PAYMENT_REFUNDED: "REFUNDED",
             PAYMENT_PARTIALLY_REFUNDED: "PARTIALLY_REFUNDED"
         };
@@ -471,24 +702,24 @@ export class LocacaoController {
         if (eventType !== "PAYMENT_UPDATED" || !paymentStatus) return null;
 
         const normalizedStatus = paymentStatus.toUpperCase();
-        const statusByPayment: Record<string, PaymentEventStatus> = {
+        const statusByPayment: Record<string, PaymentStatus> = {
             PENDING: "PENDING",
             OVERDUE: "OVERDUE",
-            CONFIRMED: "RECEIVED",
+            CONFIRMED: "CONFIRMED",
             RECEIVED: "RECEIVED",
             RECEIVED_IN_CASH: "RECEIVED",
             APPROVED_BY_RISK_ANALYSIS: "RECEIVED",
             DELETED: "DELETED",
+            CANCELED: "CANCELED",
+            REFUND_IN_PROGRESS: "REFUND_IN_PROGRESS",
             PARTIALLY_REFUNDED: "PARTIALLY_REFUNDED",
             REFUNDED: "REFUNDED"
         };
         return statusByPayment[normalizedStatus] || null;
     }
 
-    private static canTransitionPaymentStatus(current: string, next: PaymentEventStatus): boolean {
-        const normalizedCurrent = current as PaymentEventStatus;
-        const allowed = paymentStatusTransitions[normalizedCurrent];
-        return Boolean(allowed?.includes(next));
+    private static canTransitionPaymentStatus(current: string, next: PaymentStatus): boolean {
+        return canTransitionPaymentStatus(current, next);
     }
 
     private static async claimWebhookEvent(
@@ -572,24 +803,165 @@ export class LocacaoController {
     }
 
     private static async savePayments(locacaoId: number, asaasPayments: AsaasPayment[]) {
-        const repo = BancoDeDados.getRepository(PagamentoAluguel);
-        for (const payment of asaasPayments) {
-            if (!payment.id || !Number.isFinite(Number(payment.value))) continue;
-            let record = await repo.findOne({ where: { asaasPaymentId: payment.id } });
-            if (!record) {
-                record = repo.create({
-                    locacaoId,
-                    asaasPaymentId: payment.id,
-                    valor: Number(payment.value),
-                    vencimento: payment.dueDate || null,
-                    status: payment.status || "PENDING"
-                });
-            } else {
-                record.valor = Number(payment.value);
-                record.vencimento = payment.dueDate || record.vencimento;
-                record.status = payment.status || record.status;
+        await BancoDeDados.transaction(async (manager) => {
+            const locacao = await manager.getRepository(Locacao).findOneByOrFail({ id: locacaoId });
+            for (const payment of asaasPayments) {
+                if (!payment.id || !Number.isFinite(Number(payment.value)) || Number(payment.value) < 0) continue;
+                const status = getPaymentStatus("PAYMENT_UPDATED", payment.status || "PENDING");
+                if (!status) continue;
+                await LocacaoController.applyPaymentUpdate(manager, locacao, {
+                    ...payment,
+                    value: Number(payment.value)
+                }, status);
             }
-            await repo.save(record);
+        });
+    }
+
+    private static async applyPaymentUpdate(
+        manager: EntityManager,
+        locacao: Locacao,
+        payment: AsaasPayment,
+        targetStatus: PaymentStatus
+    ): Promise<void> {
+        const repo = manager.getRepository(PagamentoAluguel);
+        let existing = await repo.findOne({ where: { asaasPaymentId: payment.id } });
+        if (!existing) {
+            await repo.save(repo.create({
+                locacaoId: locacao.id,
+                asaasPaymentId: payment.id,
+                valor: payment.value,
+                vencimento: payment.dueDate || null,
+                status: targetStatus
+            }));
+            if (targetStatus === "RECEIVED" && locacao.status === "AGUARDANDO_PAGAMENTO") {
+                locacao.status = "ATIVA";
+                await manager.getRepository(Locacao).save(locacao);
+            }
+            return;
         }
+        if (existing.locacaoId !== locacao.id) {
+            throw new Error("Pagamento recebido associado a uma locação diferente.");
+        }
+
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+            if (!canTransitionPaymentStatus(existing.status, targetStatus) || existing.status === targetStatus) return;
+            const update = await repo.createQueryBuilder()
+                .update(PagamentoAluguel)
+                .set({
+                    status: targetStatus,
+                    valor: payment.value,
+                    vencimento: payment.dueDate || existing.vencimento
+                })
+                .where("id = :id AND status = :current", { id: existing.id, current: existing.status })
+                .execute();
+            if (update.affected === 1) {
+                if (targetStatus === "RECEIVED" && locacao.status === "AGUARDANDO_PAGAMENTO") {
+                    locacao.status = "ATIVA";
+                    await manager.getRepository(Locacao).save(locacao);
+                }
+                return;
+            }
+            const current = await repo.findOne({ where: { asaasPaymentId: payment.id } });
+            if (!current) return;
+            existing = current;
+        }
+    }
+
+    private static async getOrCreateOperation(
+        moradia: Moradia,
+        locatarioId: number,
+        proprietarioId: number,
+        valorMensal: number
+    ): Promise<LocacaoOperacao> {
+        const repo = BancoDeDados.getRepository(LocacaoOperacao);
+        let operation = await repo.findOne({ where: { locatarioId, moradiaId: moradia.id } });
+        if (operation) return operation;
+
+        operation = repo.create({
+            reference: randomUUID(),
+            moradiaId: moradia.id,
+            locatarioId,
+            proprietarioId,
+            valorMensal,
+            status: "PENDENTE",
+            stage: "CUSTOMER_READY",
+            asaasCustomerId: null,
+            asaasSubscriptionId: null,
+            locacaoId: null,
+            lastError: null,
+            lockedUntil: null,
+            createdAt: new Date(),
+            updatedAt: new Date()
+        });
+        try {
+            return await repo.save(operation);
+        } catch (error) {
+            const concurrent = await repo.findOne({ where: { locatarioId, moradiaId: moradia.id } });
+            if (concurrent) return concurrent;
+            throw error;
+        }
+    }
+
+    private static async findByExternalReference<T extends { id: string }>(
+        resource: "/customers" | "/subscriptions",
+        reference: string
+    ): Promise<T[]> {
+        const result = await asaasRequest<AsaasList<T>>(
+            `${resource}?externalReference=${encodeURIComponent(reference)}&limit=10`
+        );
+        return Array.isArray(result.data) ? result.data : [];
+    }
+
+    private static async updateOperationStage(
+        operation: LocacaoOperacao,
+        changes: Partial<LocacaoOperacao>,
+        expectedStage?: string
+    ): Promise<LocacaoOperacao> {
+        const query = BancoDeDados.getRepository(LocacaoOperacao).createQueryBuilder()
+            .update(LocacaoOperacao)
+            .set({ ...changes, updatedAt: new Date() })
+            .where("id = :id", { id: operation.id });
+        if (expectedStage) {
+            query.andWhere("stage = :expectedStage", { expectedStage });
+        } else {
+            query.andWhere("stage <> :complete", { complete: "COMPLETE" });
+        }
+        await query.execute();
+        return BancoDeDados.getRepository(LocacaoOperacao).findOneByOrFail({ id: operation.id });
+    }
+
+    private static async releaseOperationState(
+        operation: LocacaoOperacao,
+        status: string,
+        reason: string
+    ): Promise<void> {
+        await BancoDeDados.getRepository(LocacaoOperacao).createQueryBuilder()
+            .update(LocacaoOperacao)
+            .set({ status, lastError: reason, lockedUntil: null, updatedAt: new Date() })
+            .where("id = :id AND status = :processing", { id: operation.id, processing: "PROCESSANDO" })
+            .execute();
+    }
+
+    private static async releaseOperation(
+        res: Response,
+        operation: LocacaoOperacao,
+        moradia: Moradia,
+        message: string,
+        status: string,
+        httpStatus: number
+    ) {
+        await LocacaoController.releaseOperationState(operation, status, message);
+        return LocacaoController.renderCheckoutError(res, moradia, message, httpStatus);
+    }
+
+    private static renderCheckoutError(res: Response, moradia: Moradia, erro: string, status = 400) {
+        const valorCobrado = Number(moradia.preco) * 1.01;
+        return res.status(status).render("pagamento", {
+            moradia,
+            asaasConfigurado: isAsaasConfigured(),
+            erro,
+            breakdown: LocacaoController.calcularCobranca(valorCobrado),
+            chavePixPlataforma: "27996568893"
+        });
     }
 }

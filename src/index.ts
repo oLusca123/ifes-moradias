@@ -4,11 +4,23 @@ import "dotenv/config";
 import express from "express";
 import path from "path";
 import session from "express-session";
+import { randomBytes } from "crypto";
 
 import { BancoDeDados } from "./services/BDConn";
 import { router } from "./routers";
+import { AsaasWebhookController } from "./controllers/AsaasWebhookController";
 
 const app = express();
+const sessionSecret = process.env.SESSION_SECRET;
+if (process.env.NODE_ENV === "production" && !sessionSecret) {
+    throw new Error("SESSION_SECRET é obrigatória em produção.");
+}
+const activeSessionSecret = sessionSecret || randomBytes(32).toString("hex");
+const port = Number(process.env.PORT) || 3000;
+
+if (process.env.NODE_ENV === "production") {
+    app.set("trust proxy", 1);
+}
 
 
 // ==========================================================
@@ -28,12 +40,15 @@ app.use(express.json());
 
 app.use(
     session({
-        secret: "moradia-ifes-segredo",
+        secret: activeSessionSecret,
         resave: false,
         saveUninitialized: false,
 
         cookie: {
-            maxAge: 1000 * 60 * 60 * 24
+            maxAge: 1000 * 60 * 60 * 24,
+            httpOnly: true,
+            sameSite: "lax",
+            secure: process.env.NODE_ENV === "production"
         }
     })
 );
@@ -103,12 +118,22 @@ BancoDeDados.initialize()
             "Banco de dados conectado!"
         );
 
+        void AsaasWebhookController.processPendingEvents().catch((err) => {
+            console.error("Erro ao iniciar a reconciliação de webhooks Asaas:", err);
+        });
+        const webhookRetryTimer = setInterval(() => {
+            void AsaasWebhookController.processPendingEvents().catch((err) => {
+                console.error("Erro na reconciliação periódica de webhooks Asaas:", err);
+            });
+        }, 30_000);
+        webhookRetryTimer.unref();
+
         app.listen(
-            3000,
+            port,
             () => {
 
                 console.log(
-                    "Servidor rodando em http://localhost:3000"
+                    `Servidor rodando na porta ${port}`
                 );
 
             }

@@ -5,6 +5,7 @@ import { MoradiaController } from "./controllers/MoradiaController";
 import { AuthController } from "./controllers/AuthController";
 import { PerfilController } from "./controllers/PerfilController";
 import { LocacaoController } from "./controllers/LocacaoController";
+import { AsaasWebhookController } from "./controllers/AsaasWebhookController";
 
 const router = Router();
 const maxImageSize = 5 * 1024 * 1024;
@@ -182,7 +183,7 @@ router.get("/alugueis/contratar/:moradiaId", requireAuth, LocacaoController.chec
 router.post("/alugueis/contratar/:moradiaId", requireAuth, LocacaoController.createRental);
 router.get("/alugueis/:id", requireAuth, LocacaoController.showRental);
 router.get("/alugueis/pagamento/:paymentId/pix", requireAuth, LocacaoController.pix);
-router.post("/webhooks/asaas", LocacaoController.webhook);
+router.post("/webhooks/asaas", AsaasWebhookController.webhook);
 
 
 // ==========================================================

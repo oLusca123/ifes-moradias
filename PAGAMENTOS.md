@@ -11,6 +11,8 @@ O fluxo usa a API do Asaas para criar cobranças Pix mensais e aplicar split. O 
    - `ASAAS_API_KEY`: chave de API do Asaas da plataforma.
    - `ASAAS_ENVIRONMENT`: `sandbox` para testes ou `production` para cobranças reais.
    - `ASAAS_WEBHOOK_TOKEN`: token aleatório forte definido também no cadastro do webhook no Asaas.
+   - `SESSION_SECRET`: segredo aleatório forte para assinar sessões em produção.
+   - `DATABASE_URL`: conexão do banco do ambiente. Para sandbox, use um branch Neon isolado, nunca o branch com dados de produção.
 
    Para desenvolvimento local, copie `.env.example` para `.env`, preencha os valores e mantenha `.env` fora do Git. O projeto carrega esse arquivo ao iniciar:
 
@@ -20,16 +22,42 @@ O fluxo usa a API do Asaas para criar cobranças Pix mensais e aplicar split. O 
    npm run dev
    ```
 
-   Em produção, configure os valores no gerenciador de segredos/variáveis do provedor de hospedagem. Não use credenciais reais em ambiente local compartilhado.
+   No Render, configure estas variáveis no serviço de staging. Use uma `DATABASE_URL` do branch Neon de teste, `ASAAS_ENVIRONMENT=sandbox`, uma chave da conta sandbox e um `ASAAS_WEBHOOK_TOKEN` de teste. Configure também `SESSION_SECRET`. Defina o comando de build como `npm run build` e o comando de start como `npm start`; o script de start define `NODE_ENV=production` e o Render fornece `PORT`. Não copie credenciais Asaas ou conexão do Neon de produção para o serviço de staging.
 
-4. Cadastre no Asaas um webhook para `https://SEU-DOMINIO/webhooks/asaas`, configurando o mesmo token em `ASAAS_WEBHOOK_TOKEN`. Habilite, no mínimo, `PAYMENT_CREATED`, `PAYMENT_UPDATED`, `PAYMENT_CONFIRMED`, `PAYMENT_RECEIVED`, `PAYMENT_OVERDUE`, `PAYMENT_DELETED`, `PAYMENT_REFUNDED` e `PAYMENT_PARTIALLY_REFUNDED`.
-5. Teste o fluxo completo no sandbox com uma conta de teste para a plataforma e outra para o proprietário. Só depois de validar o webhook, a cobrança e o split, mude `ASAAS_ENVIRONMENT` para `production` e configure uma chave de produção nova.
+4. Cadastre no Asaas sandbox um webhook para `https://SEU-SERVICO-STAGING.onrender.com/webhooks/asaas`, configurando o mesmo token de teste em `ASAAS_WEBHOOK_TOKEN`. Habilite os eventos `PAYMENT_CREATED`, `PAYMENT_UPDATED`, `PAYMENT_CONFIRMED`, `PAYMENT_RECEIVED`, `PAYMENT_OVERDUE`, `PAYMENT_DELETED`, `PAYMENT_REFUND_IN_PROGRESS`, `PAYMENT_REFUNDED`, `PAYMENT_PARTIALLY_REFUNDED`, `SUBSCRIPTION_CREATED`, `SUBSCRIPTION_UPDATED`, `SUBSCRIPTION_DELETED` e `SUBSCRIPTION_INACTIVATED`.
+5. Teste o fluxo completo no sandbox com uma conta de teste para a plataforma e outra para o proprietário. Não altere o serviço de staging para `ASAAS_ENVIRONMENT=production`; produção deve ser configurada separadamente, após autorização e revisão operacional.
 
 ## Webhook de pagamentos
 
-A rota `POST /webhooks/asaas` valida `asaas-access-token` com `ASAAS_WEBHOOK_TOKEN`. Eventos autenticados são registrados em `asaas_webhook_event`, com identificador do evento, tipo, pagamento associado, horário da primeira recepção e resultado. O ID do evento tem restrição única no SQLite; duplicatas concluídas são reconhecidas e concorrentes recebem HTTP 503 para que o Asaas possa reenviá-las. Falhas de processamento são registradas como `FAILED` e retornam HTTP 500 para permitir retry. Tipos desconhecidos, pagamentos sem vínculo e transições antigas são registrados como `IGNORED`, com motivo, e confirmados com HTTP 200 para não repetir eventos que não podem ser aplicados.
+A rota `POST /webhooks/asaas` valida `asaas-access-token` comparando-o com `ASAAS_WEBHOOK_TOKEN` em tempo constante. Antes de processar, persiste o identificador único do evento, tipo, referências, valor quando aplicável, horário de recebimento, tentativas e uma projeção mínima do payload (sem dados pessoais do pagador). Entrega simultânea do mesmo ID não aplica o evento duas vezes.
 
-A entidade é criada na inicialização pelo `synchronize: true` do TypeORM. Eventos só são marcados `PROCESSED` na mesma transação que atualiza o pagamento; estados não retrocedem de recebido para pendente/atrasado, nem de reembolsado para um estado anterior.
+Os resultados possíveis ficam registrados em `asaas_webhook_event`: `PENDING`, `PROCESSING`, `PROCESSED`, `PENDING_LINK`, `FAILED` e `IGNORED`, sempre com motivo/resultado. Eventos sem locação vinculada permanecem em `PENDING_LINK`; um worker periódico os tenta novamente depois da criação/reconciliação da locação. Falhas durante a transação deixam o evento recuperável e retornam HTTP 500 ao Asaas. Um evento já persistido pode receber HTTP 200 mesmo enquanto aguarda reprocessamento: o servidor assumiu a responsabilidade durável de tentá-lo novamente. ID ou tipo inválido retorna HTTP 400; token inválido retorna HTTP 401; token não configurado retorna HTTP 503.
+
+`PAYMENT_CONFIRMED` é diferente de `PAYMENT_RECEIVED`: o primeiro registra confirmação sem ativar o contrato. A locação só passa de `AGUARDANDO_PAGAMENTO` para `ATIVA` em `PAYMENT_RECEIVED`/estado recebido válido. Atualizações condicionais de status e uma máquina explícita de transições impedem regressões por eventos atrasados ou snapshots concorrentes. Eventos desconhecidos, sem vínculo definitivo ou com transição inválida são guardados com o motivo; não alteram a cobrança.
+
+O Asaas gera cobranças da assinatura conforme a recorrência; uma cobrança futura que ainda não foi gerada não aparece na listagem. A aplicação consulta `GET /subscriptions/{id}/payments` após criar a assinatura e também depende dos webhooks para sincronizar cobranças que surjam depois. Portanto, no sandbox, aguarde `PAYMENT_CREATED`/a sincronização antes de esperar que o QR Pix apareça na locação.
+
+## Contratação recuperável
+
+Antes de qualquer chamada externa, a aplicação persiste uma operação em `locacao_operacao`, com uma referência interna única e uma etapa (`CUSTOMER_READY`, `CUSTOMER_CREATE_UNKNOWN`, `SUBSCRIPTION_READY`, `SUBSCRIPTION_CREATE_UNKNOWN`, `LOCAL_PERSIST` ou `COMPLETE`). A restrição única por locatário/imóvel e um lease de processamento impedem duas solicitações concorrentes de iniciar o mesmo fluxo.
+
+As chamadas POST ao Asaas têm timeout. Se a conexão cair depois de uma criação e não houver confirmação da resposta, a operação muda para reconciliação e não envia outro POST automaticamente. A aplicação consulta os endpoints de clientes/assinaturas pelo `externalReference` único e só avança quando encontra um único resultado. Mais de um resultado, ou nenhum após um POST de resultado incerto, exige conferência — não se presume que `externalReference` seja uma chave de idempotência do Asaas.
+
+Não há transação de banco aberta durante as chamadas HTTP. Se a assinatura for criada, mas a persistência local falhar, a próxima tentativa tenta localizar a assinatura existente antes de qualquer novo envio. Eventos de assinatura/pagamento que chegarem antes do vínculo local ficam pendentes e são reconciliados pelo worker.
+
+## Banco e migrations
+
+O SQLite local continua usando `synchronize` para facilitar o desenvolvimento. Em PostgreSQL/Neon, `synchronize` fica desativado; o servidor não executa migrations automaticamente.
+
+No Neon informado para este projeto, as estruturas de `locacao`, `locacao_operacao`, `pagamento_aluguel` e `asaas_webhook_event` já existem, mas `public.migrations` não existe. Portanto, não execute a migration `AddReliableAsaasFlow` só para criar o histórico. Antes de qualquer regularização:
+
+1. Compare tipos, nulabilidade, defaults, índices e constraints de todas as colunas com as entidades e com o SQL da migration.
+2. Crie um branch Neon de staging e valide ali o procedimento, sem apontá-lo para a base de produção.
+3. Faça backup e obtenha aprovação explícita antes de qualquer escrita em produção.
+4. Se a estrutura for equivalente, planeje um baseline que registre a migration como refletida no schema, sem reaplicar seu `up`. Se houver divergência, prepare uma migration corretiva específica.
+5. Execute o procedimento aprovado uma única vez e confira o histórico e o schema depois.
+
+O projeto ainda não possui comando `migration:run` implementado em `package.json`; não use esse comando até existir um runner revisado que use uma conexão direta e mantenha `synchronize` desativado. Nenhum baseline é criado automaticamente. A migration não é reversível automaticamente.
 
 ## Quem precisa criar o quê?
 

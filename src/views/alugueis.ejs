@@ -50,7 +50,7 @@
                                     <h2><%= moradia ? moradia.titulo : 'Moradia' %></h2>
                                     <p><%= outraPessoa ? outraPessoa.nome : 'Participante do contrato' %> · <%= moradia ? moradia.bairro : '' %></p>
                                 </div>
-                                <strong class="status"><%= locacao.status === 'ATIVA' ? 'Contrato ativo' : locacao.status %></strong>
+                                <strong class="status"><%= locacao.status === 'ATIVA' ? 'Contrato ativo' : locacao.status === 'AGUARDANDO_PAGAMENTO' ? 'Aguardando primeiro pagamento' : locacao.status %></strong>
                             </div>
                             <div class="rental-card-meta">
                                 <span>R$ <%= Number(locacao.valorMensal).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) %> / mês</span>
