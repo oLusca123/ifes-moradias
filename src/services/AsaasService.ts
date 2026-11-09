@@ -2,13 +2,21 @@ export class AsaasApiError extends Error {
     status: number | null;
     ambiguous: boolean;
     validationCodes: string[];
+    validationErrors: AsaasValidationError[];
 
-    constructor(message: string, status: number | null, ambiguous: boolean, validationCodes: string[] = []) {
+    constructor(
+        message: string,
+        status: number | null,
+        ambiguous: boolean,
+        validationCodes: string[] = [],
+        validationErrors: AsaasValidationError[] = []
+    ) {
         super(message);
         this.name = "AsaasApiError";
         this.status = status;
         this.ambiguous = ambiguous;
         this.validationCodes = validationCodes;
+        this.validationErrors = validationErrors;
     }
 }
 
@@ -44,19 +52,46 @@ function extractValidationErrors(payload: unknown): AsaasValidationError[] {
     return (payload as { errors: unknown[] }).errors.flatMap((item) => {
         if (!item || typeof item !== "object") return [];
         const error = item as { code?: unknown; description?: unknown };
-        if (typeof error.code !== "string") return [];
+        if (typeof error.code !== "string" || !/^[A-Za-z0-9_.-]{1,100}$/.test(error.code)) return [];
         return [{
             code: error.code,
-            description: typeof error.description === "string" ? error.description : null
+            description: typeof error.description === "string"
+                ? sanitizeValidationDescription(error.description)
+                : null
         }];
     });
+}
+
+function sanitizeValidationDescription(description: string): string | null {
+    const trimmed = description.trim();
+    if (!trimmed || trimmed.length > 300) return null;
+    const firstWord = trimmed.match(/^\p{L}+/u)?.[0];
+    const approvedSentenceStarts = new Set([
+        "A", "An", "As", "Field", "Invalid", "It", "O", "Os", "The", "This", "Value", "É", "Não"
+    ]);
+
+    const sensitiveContent = [
+        /\d/,
+        /[@/\\]/,
+        /\b(?:cpf|cnpj|documento|document|e-?mail|telefone|phone|celular|mobile|nome|name|wallet|carteira|token|api[\s_-]*key|chave|customer|cliente|account|conta|address|endereço|postal|cep|externalreference|reference|identificador|identifier|id)\b/i,
+        /\b[A-Za-z0-9_-]{16,}\b/,
+        /[a-z]\p{Lu}/u
+    ];
+    if (sensitiveContent.some((pattern) => pattern.test(trimmed))) return null;
+    if (!/^[\p{L}\s.,:;()'-]+$/u.test(trimmed)) return null;
+    if (firstWord && /^\p{Lu}/u.test(firstWord) && !approvedSentenceStarts.has(firstWord)) return null;
+    if (firstWord && trimmed.slice(firstWord.length).match(/\p{Lu}/u)) return null;
+
+    return trimmed;
 }
 
 function safeEndpoint(path: string): string {
     const pathname = new URL(path, "https://asaas.invalid").pathname;
     return pathname
         .replace(/\/payments\/[^/]+\/pixQrCode$/, "/payments/:paymentId/pixQrCode")
-        .replace(/\/subscriptions\/[^/]+\/payments$/, "/subscriptions/:subscriptionId/payments");
+        .replace(/\/subscriptions\/[^/]+\/payments$/, "/subscriptions/:subscriptionId/payments")
+        .replace(/\/(?:cus|sub|pay|wal)_[^/]+/gi, "/:resourceId")
+        .replace(/\/[A-Za-z0-9_-]{20,}(?=\/|$)/g, "/:resourceId");
 }
 
 export async function asaasRequest<T>(path: string, options: AsaasRequestOptions = {}): Promise<T> {
@@ -88,22 +123,21 @@ export async function asaasRequest<T>(path: string, options: AsaasRequestOptions
                 payload = null;
             }
             const validationErrors = extractValidationErrors(payload);
-            const validationCodes = validationErrors
-                .map(({ code }) => code)
-                .filter((code) => /^[A-Za-z0-9_.-]{1,100}$/.test(code));
+            const validationCodes = validationErrors.map(({ code }) => code);
 
             console.error("Asaas API request rejected", {
                 method,
                 endpoint: safeEndpoint(path),
                 status: response.status,
-                validationCodes
+                validationErrors
             });
 
             throw new AsaasApiError(
                 "O Asaas não conseguiu concluir a solicitação.",
                 response.status,
                 method === "POST" && response.status >= 500,
-                validationCodes
+                validationCodes,
+                validationErrors
             );
         }
 

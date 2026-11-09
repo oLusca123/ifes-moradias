@@ -101,7 +101,14 @@ test('Asaas validation errors log only safe metadata and codes', async () => {
           code: 'invalid_split_wallet',
           description: `Validation failed for ${sensitiveValues.join(' ')}`
         },
-        { code: 'bad-value', description: 'Value invalid' },
+        { code: 'bad-value', description: 'The value is invalid.' },
+        { code: 'invalid-customer', description: 'Customer Sensitive Name is invalid.' },
+        { code: 'invalid-person', description: 'John is invalid.' },
+        { code: 'invalid-wallet', description: 'Wallet walletsecretidentifier is invalid.' },
+        { code: 'invalid-email', description: 'Invalid email private.test@example.com.' },
+        { code: 'invalid-document', description: 'CPF 529.982.247-25 is invalid.' },
+        { code: 'invalid-phone', description: 'Phone +55 27 99999-1234 is invalid.' },
+        { code: 'invalid-token', description: 'Invalid token abcdefghijklmnop.' },
         { code: `invalid-${sensitiveValues[0]}`, description: 'Unsafe code' },
         { code: 'missing-description' }
       ]
@@ -122,7 +129,30 @@ test('Asaas validation errors log only safe metadata and codes', async () => {
         assert.equal(error.message, 'O Asaas não conseguiu concluir a solicitação.');
         assert.equal(error.status, 400);
         assert.equal(error.ambiguous, false);
-        assert.deepEqual(error.validationCodes, ['invalid_split_wallet', 'bad-value', 'missing-description']);
+        assert.deepEqual(error.validationCodes, [
+          'invalid_split_wallet',
+          'bad-value',
+          'invalid-customer',
+          'invalid-person',
+          'invalid-wallet',
+          'invalid-email',
+          'invalid-document',
+          'invalid-phone',
+          'invalid-token',
+          'missing-description'
+        ]);
+        assert.deepEqual(error.validationErrors.map(({ code, description }) => [code, description]), [
+          ['invalid_split_wallet', null],
+          ['bad-value', 'The value is invalid.'],
+          ['invalid-customer', null],
+          ['invalid-person', null],
+          ['invalid-wallet', null],
+          ['invalid-email', null],
+          ['invalid-document', null],
+          ['invalid-phone', null],
+          ['invalid-token', null],
+          ['missing-description', null]
+        ]);
         return true;
       }
     );
@@ -135,7 +165,19 @@ test('Asaas validation errors log only safe metadata and codes', async () => {
     assert.match(log, /invalid_split_wallet/);
     assert.match(log, /bad-value/);
     assert.match(log, /missing-description/);
-    for (const sensitiveValue of [...sensitiveValues, 'private-reference', 'Validation failed', 'Value invalid']) {
+    assert.match(log, /The value is invalid/);
+    for (const sensitiveValue of [
+      ...sensitiveValues,
+      'private-reference',
+      'Validation failed',
+      'Sensitive Name',
+      'John is invalid',
+      'email private.test@example.com',
+      'CPF 529.982.247-25',
+      '+55 27 99999-1234',
+      'abcdefghijklmnop',
+      'Unsafe code'
+    ]) {
       assert.equal(log.includes(sensitiveValue), false, `log must not include ${sensitiveValue}`);
     }
   } finally {
