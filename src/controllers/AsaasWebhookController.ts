@@ -40,11 +40,15 @@ export class AsaasWebhookController {
         const received = req.header("asaas-access-token");
         const expectedBytes = Buffer.from(expected);
         const receivedBytes = Buffer.from(received || "");
-        if (
-            !received
-            || expectedBytes.length !== receivedBytes.length
-            || !timingSafeEqual(expectedBytes, receivedBytes)
-        ) {
+        const tokensMatch = Boolean(received)
+            && expectedBytes.length === receivedBytes.length
+            && timingSafeEqual(expectedBytes, receivedBytes);
+        if (!tokensMatch) {
+            console.warn("Asaas webhook authentication failed:", {
+                expectedTokenConfigured: Boolean(expected),
+                receivedTokenPresent: Boolean(received),
+                tokensMatch
+            });
             return res.status(401).send("Não autorizado.");
         }
 

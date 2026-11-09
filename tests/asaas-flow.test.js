@@ -71,6 +71,69 @@ test('webhook route remains published under /webhooks/asaas', () => {
   assert.equal(route.route.methods.post, true);
 });
 
+test('webhook 401 logs only boolean token diagnostics', async () => {
+  const originalToken = process.env.ASAAS_WEBHOOK_TOKEN;
+  const originalConsoleWarn = console.warn;
+  const logs = [];
+  const webhookTokenSentinel = 'private-webhook-token-sentinel';
+  const webhookResponse = () => ({
+    statusCode: 200,
+    status(code) { this.statusCode = code; return this; },
+    send(message) { this.message = message; return this; }
+  });
+  const invokeWebhook = async (receivedToken) => {
+    const res = webhookResponse();
+    await AsaasWebhookController.webhook({
+      header: (name) => name === 'asaas-access-token' ? receivedToken : undefined,
+      body: {}
+    }, res);
+    return res;
+  };
+
+  console.warn = (...args) => logs.push(args);
+  try {
+    process.env.ASAAS_WEBHOOK_TOKEN = webhookTokenSentinel;
+    const missingHeaderResponse = await invokeWebhook(undefined);
+    assert.equal(missingHeaderResponse.statusCode, 401);
+
+    const mismatchedTokenResponse = await invokeWebhook('different-private-token');
+    assert.equal(mismatchedTokenResponse.statusCode, 401);
+
+    const matchingTokenResponse = await invokeWebhook(webhookTokenSentinel);
+    assert.equal(matchingTokenResponse.statusCode, 400);
+
+    delete process.env.ASAAS_WEBHOOK_TOKEN;
+    const unconfiguredResponse = await invokeWebhook(webhookTokenSentinel);
+    assert.equal(unconfiguredResponse.statusCode, 503);
+  } finally {
+    console.warn = originalConsoleWarn;
+    if (originalToken === undefined) delete process.env.ASAAS_WEBHOOK_TOKEN;
+    else process.env.ASAAS_WEBHOOK_TOKEN = originalToken;
+  }
+
+  assert.deepEqual(logs, [
+    [
+      'Asaas webhook authentication failed:',
+      {
+        expectedTokenConfigured: true,
+        receivedTokenPresent: false,
+        tokensMatch: false
+      }
+    ],
+    [
+      'Asaas webhook authentication failed:',
+      {
+        expectedTokenConfigured: true,
+        receivedTokenPresent: true,
+        tokensMatch: false
+      }
+    ]
+  ]);
+  const serializedLogs = JSON.stringify(logs);
+  assert.equal(serializedLogs.includes(webhookTokenSentinel), false);
+  assert.equal(serializedLogs.includes('different-private-token'), false);
+});
+
 test('rental pricing remains consistent with the current business rule', () => {
   const result = LocacaoController.calcularCobranca(101);
   assert.equal(result.valorCobrado, 101);
