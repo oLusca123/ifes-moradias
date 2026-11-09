@@ -7,6 +7,11 @@ import { Moradia } from "../models/Moradia";
 import { Usuario } from "../models/Usuario";
 import { AsaasApiError, asaasRequest, isAsaasConfigured } from "../services/AsaasService";
 import {
+    findStagingDemoOwner,
+    isStagingDemoRentalsEnabled,
+    sandboxDemoWalletId
+} from "../services/AsaasSandboxDemoRentals";
+import {
     canTransitionPaymentStatus,
     getPaymentStatus,
     isValidCpfCnpj,
@@ -102,12 +107,21 @@ export class LocacaoController {
         try {
             const id = Number(req.params.moradiaId);
             const moradia = await BancoDeDados.getRepository(Moradia).findOne({ where: { id } });
-            if (!moradia || moradia.demonstracao || !moradia.disponivel || !moradia.proprietarioId) {
+            if (!moradia || !moradia.disponivel) {
                 return res.status(404).send("Este imóvel não está disponível para contratação pelo site.");
             }
-            const proprietario = await BancoDeDados.getRepository(Usuario).findOne({
-                where: { id: moradia.proprietarioId }
-            });
+            const demoRental = moradia.demonstracao && isStagingDemoRentalsEnabled();
+            if (moradia.demonstracao && !demoRental) {
+                return res.status(404).send("Este imóvel não está disponível para contratação pelo site.");
+            }
+            if (!demoRental && !moradia.proprietarioId) {
+                return res.status(404).send("Este imóvel não está disponível para contratação pelo site.");
+            }
+            const proprietario = demoRental
+                ? await findStagingDemoOwner()
+                : await BancoDeDados.getRepository(Usuario).findOne({
+                    where: { id: moradia.proprietarioId! }
+                });
             if (!proprietario) {
                 return res.status(409).render("pagamento", {
                     moradia,
@@ -115,7 +129,8 @@ export class LocacaoController {
                     erro: "O proprietário ainda precisa concluir o cadastro de recebimento."
                 });
             }
-            if (process.env.ASAAS_API_KEY && !proprietario.asaasWalletId) {
+            const walletId = demoRental ? sandboxDemoWalletId : proprietario.asaasWalletId;
+            if (process.env.ASAAS_API_KEY && !walletId) {
                 return res.status(409).render("pagamento", {
                     moradia,
                     asaasConfigurado: true,
@@ -143,10 +158,30 @@ export class LocacaoController {
         let operation: LocacaoOperacao | null = null;
         try {
             const moradia = await BancoDeDados.getRepository(Moradia).findOne({ where: { id: moradiaId } });
-            if (!moradia || moradia.demonstracao || !moradia.disponivel || !moradia.proprietarioId) {
+            if (!moradia || !moradia.disponivel) {
                 return res.status(404).send("Este imóvel não está disponível para contratação pelo site.");
             }
-            if (moradia.proprietarioId === locatarioId) {
+            const demoRental = moradia.demonstracao && isStagingDemoRentalsEnabled();
+            if (moradia.demonstracao && !demoRental) {
+                return res.status(404).send("Este imóvel não está disponível para contratação pelo site.");
+            }
+            if (!demoRental && !moradia.proprietarioId) {
+                return res.status(404).send("Este imóvel não está disponível para contratação pelo site.");
+            }
+            const proprietario = demoRental
+                ? await findStagingDemoOwner()
+                : await BancoDeDados.getRepository(Usuario).findOne({
+                    where: { id: moradia.proprietarioId! }
+                });
+            if (!proprietario) {
+                return LocacaoController.renderCheckoutError(
+                    res,
+                    moradia,
+                    "O proprietário ainda precisa concluir o cadastro de recebimento.",
+                    409
+                );
+            }
+            if (proprietario.id === locatarioId) {
                 return res.status(400).send("Você não pode contratar o próprio imóvel.");
             }
             const locacaoRepo = BancoDeDados.getRepository(Locacao);
@@ -155,9 +190,6 @@ export class LocacaoController {
                 return res.redirect(`/alugueis/${existente.id}`);
             }
 
-            const proprietario = await BancoDeDados.getRepository(Usuario).findOne({
-                where: { id: moradia.proprietarioId }
-            });
             const locatario = await BancoDeDados.getRepository(Usuario).findOne({ where: { id: locatarioId } });
             const cpf = typeof req.body.cpfCnpj === "string" ? req.body.cpfCnpj.replace(/\D/g, "") : "";
             if (!locatario) {
@@ -171,7 +203,8 @@ export class LocacaoController {
                     503
                 );
             }
-            if (!proprietario?.asaasWalletId) {
+            const walletId = demoRental ? sandboxDemoWalletId : proprietario.asaasWalletId;
+            if (!walletId) {
                 return LocacaoController.renderCheckoutError(
                     res,
                     moradia,
@@ -362,7 +395,7 @@ export class LocacaoController {
                                 description: `Aluguel mensal com taxa da plataforma: ${moradia.titulo}`,
                                 externalReference: operation.reference,
                                 split: [{
-                                    walletId: proprietario.asaasWalletId,
+                                    walletId,
                                     percentualValue: 99
                                 }]
                             }

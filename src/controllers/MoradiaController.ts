@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { BancoDeDados } from '../services/BDConn';
 import { Moradia } from '../models/Moradia';
+import { findStagingDemoOwner } from '../services/AsaasSandboxDemoRentals';
 
 export class MoradiaController {
 
@@ -353,11 +354,16 @@ export class MoradiaController {
                 return res.status(404).send('Moradia não encontrada.');
             }
 
+            const usuarioId = Number((req.session as any).usuarioId);
+            const demoOwner = moradia.demonstracao && moradia.disponivel
+                ? await findStagingDemoOwner()
+                : null;
             return res.render('moradia_detalhes', {
                 moradia,
                 comodidades: JSON.parse(moradia.comodidades || '[]') as string[],
+                stagingDemoRentalAvailable: Boolean(demoOwner && demoOwner.id !== usuarioId),
                 usuario: req.session && (req.session as any).usuarioNome ? {
-                    id: Number((req.session as any).usuarioId),
+                    id: usuarioId,
                     nome: (req.session as any).usuarioNome,
                     tipo: (req.session as any).usuarioTipo,
                     foto: (req.session as any).usuarioFoto

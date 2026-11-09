@@ -12,12 +12,18 @@ process.env.DATABASE_PATH = dbPath;
 process.env.ASAAS_API_KEY = 'test-key';
 process.env.ASAAS_ENVIRONMENT = 'sandbox';
 process.env.ASAAS_WEBHOOK_TOKEN = 'webhook-token';
+process.env.RENDER_GIT_BRANCH = 'staging-asaas';
 
 const { getPaymentStatus, canTransitionPaymentStatus } = require('../dist/services/AsaasPaymentState.js');
 const { asaasRequest, AsaasApiError } = require('../dist/services/AsaasService.js');
+const {
+  isStagingDemoRentalsEnabled,
+  sandboxDemoWalletId
+} = require('../dist/services/AsaasSandboxDemoRentals.js');
 const { BancoDeDados } = require('../dist/services/BDConn.js');
 const { router } = require('../dist/routers.js');
 const { LocacaoController } = require('../dist/controllers/LocacaoController.js');
+const { MoradiaController } = require('../dist/controllers/MoradiaController.js');
 const { AsaasWebhookController } = require('../dist/controllers/AsaasWebhookController.js');
 const { Locacao, LocacaoOperacao, PagamentoAluguel, AsaasWebhookEvent } = require('../dist/models/Locacao.js');
 const { Moradia } = require('../dist/models/Moradia.js');
@@ -69,6 +75,54 @@ test('payment status transitions respect official ordering', () => {
 test('webhook route remains published under /webhooks/asaas', () => {
   assert.ok(route, 'webhook route must exist');
   assert.equal(route.route.methods.post, true);
+});
+
+test('rental routes continue to require an authenticated session', () => {
+  const rentalRoute = router.stack.find((layer) =>
+    layer.route && layer.route.path === '/alugueis/contratar/:moradiaId' && layer.route.methods.post);
+  assert.ok(rentalRoute, 'rental POST route must exist');
+  assert.equal(rentalRoute.route.stack.length, 2);
+
+  let continued = false;
+  const response = {
+    redirect(location) { this.location = location; return this; }
+  };
+  rentalRoute.route.stack[0].handle({
+    session: {},
+    originalUrl: '/alugueis/contratar/1'
+  }, response, () => { continued = true; });
+  assert.equal(continued, false);
+  assert.match(response.location, /^\/login\?/);
+});
+
+test('staging demo rentals require the sandbox, branch, and explicit flag', () => {
+  const originalEnvironment = process.env.ASAAS_ENVIRONMENT;
+  const originalFlag = process.env.ASAAS_STAGING_DEMO_RENTALS;
+  const originalBranch = process.env.RENDER_GIT_BRANCH;
+  try {
+    process.env.ASAAS_ENVIRONMENT = 'sandbox';
+    process.env.ASAAS_STAGING_DEMO_RENTALS = 'true';
+    process.env.RENDER_GIT_BRANCH = 'staging-asaas';
+    assert.equal(isStagingDemoRentalsEnabled(), true);
+
+    process.env.ASAAS_ENVIRONMENT = 'production';
+    assert.equal(isStagingDemoRentalsEnabled(), false);
+    process.env.ASAAS_ENVIRONMENT = 'sandbox';
+
+    process.env.RENDER_GIT_BRANCH = 'main';
+    assert.equal(isStagingDemoRentalsEnabled(), false);
+    process.env.RENDER_GIT_BRANCH = 'staging-asaas';
+
+    process.env.ASAAS_STAGING_DEMO_RENTALS = 'false';
+    assert.equal(isStagingDemoRentalsEnabled(), false);
+  } finally {
+    if (originalEnvironment === undefined) delete process.env.ASAAS_ENVIRONMENT;
+    else process.env.ASAAS_ENVIRONMENT = originalEnvironment;
+    if (originalFlag === undefined) delete process.env.ASAAS_STAGING_DEMO_RENTALS;
+    else process.env.ASAAS_STAGING_DEMO_RENTALS = originalFlag;
+    if (originalBranch === undefined) delete process.env.RENDER_GIT_BRANCH;
+    else process.env.RENDER_GIT_BRANCH = originalBranch;
+  }
 });
 
 test('webhook 401 logs only boolean token diagnostics', async () => {
@@ -250,6 +304,8 @@ test('Asaas validation errors log only safe metadata and codes', async () => {
 });
 
 test('sandbox subscription and Pix QR flow uses mocked Asaas responses only', async () => {
+  const originalDemoFlag = process.env.ASAAS_STAGING_DEMO_RENTALS;
+  process.env.ASAAS_STAGING_DEMO_RENTALS = 'true';
   const locatario = await BancoDeDados.getRepository(Usuario).save({
     nome: 'Locatario Sandbox', email: 'sandbox-locatario@test.com', senha: '123', tipo: 'COMUM'
   });
@@ -389,6 +445,214 @@ test('sandbox subscription and Pix QR flow uses mocked Asaas responses only', as
     assert.equal(rental.status, 'ATIVA');
   } finally {
     global.fetch = originalFetch;
+    if (originalDemoFlag === undefined) delete process.env.ASAAS_STAGING_DEMO_RENTALS;
+    else process.env.ASAAS_STAGING_DEMO_RENTALS = originalDemoFlag;
+  }
+});
+
+test('demo rental is rejected outside the explicitly enabled staging sandbox', async () => {
+  const originalEnvironment = process.env.ASAAS_ENVIRONMENT;
+  const originalFlag = process.env.ASAAS_STAGING_DEMO_RENTALS;
+  const originalBranch = process.env.RENDER_GIT_BRANCH;
+  const originalFetch = global.fetch;
+  const locatario = await BancoDeDados.getRepository(Usuario).save({
+    nome: 'Locatario sem modo de teste', email: 'demo-disabled@test.com', senha: '123', tipo: 'COMUM'
+  });
+  const testOwner = await BancoDeDados.getRepository(Usuario).save({
+    nome: 'Conta Sandbox', email: 'demo-disabled-owner@test.com', senha: '123',
+    tipo: 'COMUM', asaasWalletId: sandboxDemoWalletId
+  });
+  const moradia = await BancoDeDados.getRepository(Moradia).save({
+    titulo: 'Moradia demonstrativa bloqueada', preco: 100, imagem: '/demo.jpg',
+    proprietarioId: null, disponivel: true, demonstracao: true
+  });
+  let externalRequests = 0;
+  global.fetch = async () => {
+    externalRequests += 1;
+    throw new Error('No external API calls are expected in this test.');
+  };
+
+  try {
+    process.env.ASAAS_ENVIRONMENT = 'sandbox';
+    process.env.ASAAS_STAGING_DEMO_RENTALS = 'true';
+    process.env.RENDER_GIT_BRANCH = 'main';
+    const response = {
+      statusCode: 200,
+      status(code) { this.statusCode = code; return this; },
+      send(message) { this.message = message; return this; },
+      render(view, data) { this.view = view; this.data = data; return this; }
+    };
+    await LocacaoController.createRental({
+      session: { usuarioId: locatario.id },
+      params: { moradiaId: String(moradia.id) },
+      body: { cpfCnpj: '529.982.247-25' }
+    }, response);
+    assert.equal(response.statusCode, 404);
+    assert.equal(externalRequests, 0);
+    assert.equal(await BancoDeDados.getRepository(LocacaoOperacao).count(), 0);
+
+    const ownerDetailsResponse = {
+      render(view, data) { this.view = view; this.data = data; return this; }
+    };
+    await MoradiaController.show({
+      params: { id: String(moradia.id) },
+      session: { usuarioId: testOwner.id, usuarioNome: testOwner.nome, usuarioTipo: testOwner.tipo }
+    }, ownerDetailsResponse);
+    assert.equal(ownerDetailsResponse.data.stagingDemoRentalAvailable, false);
+  } finally {
+    global.fetch = originalFetch;
+    if (originalEnvironment === undefined) delete process.env.ASAAS_ENVIRONMENT;
+    else process.env.ASAAS_ENVIRONMENT = originalEnvironment;
+    if (originalFlag === undefined) delete process.env.ASAAS_STAGING_DEMO_RENTALS;
+    else process.env.ASAAS_STAGING_DEMO_RENTALS = originalFlag;
+    if (originalBranch === undefined) delete process.env.RENDER_GIT_BRANCH;
+    else process.env.RENDER_GIT_BRANCH = originalBranch;
+  }
+});
+
+test('staging demo rentals use the sandbox wallet without changing housing or user roles', async () => {
+  const originalFlag = process.env.ASAAS_STAGING_DEMO_RENTALS;
+  const originalFetch = global.fetch;
+  process.env.ASAAS_ENVIRONMENT = 'sandbox';
+  process.env.RENDER_GIT_BRANCH = 'staging-asaas';
+  process.env.ASAAS_STAGING_DEMO_RENTALS = 'true';
+
+  const locatario = await BancoDeDados.getRepository(Usuario).save({
+    nome: 'Locatario de teste', email: 'demo-renter@test.com', senha: '123', tipo: 'COMUM'
+  });
+  const testOwner = await BancoDeDados.getRepository(Usuario).save({
+    nome: 'Conta Sandbox', email: 'demo-owner@test.com', senha: '123',
+    tipo: 'COMUM', asaasWalletId: sandboxDemoWalletId
+  });
+  const moradia = await BancoDeDados.getRepository(Moradia).save({
+    titulo: 'Moradia demonstrativa', preco: 100, imagem: '/demo.jpg',
+    proprietarioId: null, disponivel: true, demonstracao: true
+  });
+  const requests = [];
+  global.fetch = async (url, options = {}) => {
+    requests.push({ url: String(url), options });
+    const parsedUrl = new URL(String(url));
+    let response;
+    if (parsedUrl.pathname === '/v3/customers' && options.method === 'POST') {
+      response = { id: 'cus_demo_1' };
+    } else if (parsedUrl.pathname === '/v3/customers') {
+      response = { data: [] };
+    } else if (parsedUrl.pathname === '/v3/subscriptions' && options.method === 'POST') {
+      response = { id: 'sub_demo_1' };
+    } else if (parsedUrl.pathname === '/v3/subscriptions') {
+      response = { data: [] };
+    } else if (parsedUrl.pathname === '/v3/subscriptions/sub_demo_1/payments') {
+      response = { data: [{
+        id: 'pay_demo_1', value: 101, status: 'PENDING', dueDate: '2026-12-01'
+      }] };
+    } else if (parsedUrl.pathname === '/v3/payments/pay_demo_1/pixQrCode') {
+      response = { encodedImage: 'mock-demo-image', payload: 'mock-demo-pix' };
+    } else {
+      throw new Error(`Unexpected mocked Asaas request: ${options.method || 'GET'} ${parsedUrl.pathname}`);
+    }
+
+    return { ok: true, status: 200, json: async () => response };
+  };
+
+  const response = () => ({
+    statusCode: 200,
+    status(code) { this.statusCode = code; return this; },
+    render(view, data) { this.view = view; this.data = data; return this; },
+    send(message) { this.message = message; return this; },
+    redirect(location) { this.location = location; return this; },
+    sendStatus(code) { this.statusCode = code; return this; }
+  });
+  const webhook = async (eventId, event) => {
+    const res = response();
+    await AsaasWebhookController.webhook({
+      header: (name) => name === 'asaas-access-token' ? 'webhook-token' : undefined,
+      body: {
+        id: eventId,
+        event,
+        payment: {
+          id: 'pay_demo_1',
+          value: 101,
+          status: event === 'PAYMENT_RECEIVED' ? 'RECEIVED' : 'CONFIRMED',
+          subscription: 'sub_demo_1',
+          dueDate: '2026-12-01'
+        }
+      }
+    }, res);
+    return res;
+  };
+
+  try {
+    const demoDetailsResponse = response();
+    await MoradiaController.show({
+      params: { id: String(moradia.id) },
+      session: { usuarioId: locatario.id, usuarioNome: locatario.nome, usuarioTipo: locatario.tipo }
+    }, demoDetailsResponse);
+    assert.equal(demoDetailsResponse.view, 'moradia_detalhes');
+    assert.equal(demoDetailsResponse.data.stagingDemoRentalAvailable, true);
+    assert.equal(JSON.stringify(demoDetailsResponse.data).includes(sandboxDemoWalletId), false);
+
+    const selfRentalResponse = response();
+    await LocacaoController.createRental({
+      session: { usuarioId: testOwner.id },
+      params: { moradiaId: String(moradia.id) },
+      body: { cpfCnpj: '529.982.247-25' }
+    }, selfRentalResponse);
+    assert.equal(selfRentalResponse.statusCode, 400);
+    assert.equal(requests.length, 0);
+
+    const rentalResponse = response();
+    await LocacaoController.createRental({
+      session: { usuarioId: locatario.id },
+      params: { moradiaId: String(moradia.id) },
+      body: { cpfCnpj: '529.982.247-25' }
+    }, rentalResponse);
+    assert.match(rentalResponse.location, /^\/alugueis\/\d+$/);
+
+    const subscriptionRequest = requests.find(({ url, options }) =>
+      new URL(url).pathname === '/v3/subscriptions' && options.method === 'POST');
+    assert.ok(subscriptionRequest);
+    const subscriptionBody = JSON.parse(subscriptionRequest.options.body);
+    assert.equal(subscriptionBody.value, 101);
+    assert.equal(subscriptionBody.billingType, 'PIX');
+    assert.equal(subscriptionBody.cycle, 'MONTHLY');
+    assert.equal(subscriptionBody.split[0].walletId, sandboxDemoWalletId);
+    assert.equal(subscriptionBody.split[0].percentualValue, 99);
+
+    const persistedHousing = await BancoDeDados.getRepository(Moradia).findOneByOrFail({ id: moradia.id });
+    assert.equal(persistedHousing.proprietarioId, null);
+    const persistedOwner = await BancoDeDados.getRepository(Usuario).findOneByOrFail({ id: testOwner.id });
+    assert.equal(persistedOwner.tipo, 'COMUM');
+    const rental = await BancoDeDados.getRepository(Locacao).findOneByOrFail({
+      asaasSubscriptionId: 'sub_demo_1'
+    });
+    assert.equal(rental.proprietarioId, testOwner.id);
+    assert.equal(rental.status, 'AGUARDANDO_PAGAMENTO');
+
+    const payment = await BancoDeDados.getRepository(PagamentoAluguel).findOneByOrFail({
+      asaasPaymentId: 'pay_demo_1'
+    });
+    const pixResponse = response();
+    await LocacaoController.pix({
+      session: { usuarioId: locatario.id },
+      params: { paymentId: String(payment.id) }
+    }, pixResponse);
+    assert.equal(pixResponse.data.pix.payload, 'mock-demo-pix');
+
+    const confirmedResponse = await webhook('evt_demo_confirmed', 'PAYMENT_CONFIRMED');
+    assert.equal(confirmedResponse.statusCode, 200);
+    let refreshedRental = await BancoDeDados.getRepository(Locacao).findOneByOrFail({ id: rental.id });
+    assert.equal(refreshedRental.status, 'AGUARDANDO_PAGAMENTO');
+
+    const receivedResponse = await webhook('evt_demo_received', 'PAYMENT_RECEIVED');
+    assert.equal(receivedResponse.statusCode, 200);
+    refreshedRental = await BancoDeDados.getRepository(Locacao).findOneByOrFail({ id: rental.id });
+    assert.equal(refreshedRental.status, 'ATIVA');
+    assert.ok(requests.some(({ url }) =>
+      new URL(url).pathname === '/v3/payments/pay_demo_1/pixQrCode'));
+  } finally {
+    global.fetch = originalFetch;
+    if (originalFlag === undefined) delete process.env.ASAAS_STAGING_DEMO_RENTALS;
+    else process.env.ASAAS_STAGING_DEMO_RENTALS = originalFlag;
   }
 });
 
