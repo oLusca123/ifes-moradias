@@ -113,8 +113,8 @@
                                 <label for="bairro">Região ou distrito <span class="required-mark">*</span></label>
                                 <select id="bairro" name="bairro" required>
                                     <option value="">Selecione a região</option>
-                                    <% ['Santa Teresa', 'Barracão', 'São João de Petrópolis', 'Patrimônio', 'São Roque', 'Outra localidade'].forEach((regiao) => { %>
-                                        <option value="<%= regiao %>" <%= formData.bairro === regiao ? 'selected' : '' %>><%= regiao %></option>
+                                    <% ['Santa Teresa', 'São João de Petrópolis (Barracão)', 'Patrimônio', 'São Roque', 'Outra localidade'].forEach((regiao) => { %>
+                                        <option value="<%= regiao %>" <%= formatLocalidade(formData.bairro) === regiao ? 'selected' : '' %>><%= regiao %></option>
                                     <% }) %>
                                 </select>
                             </div>

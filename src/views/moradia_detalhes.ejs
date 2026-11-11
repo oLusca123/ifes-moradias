@@ -48,7 +48,7 @@
                 <div class="detail-header">
                     <div>
                         <h1><%= moradia.titulo %></h1>
-                        <div class="detail-location">📍 <%= moradia.localizacao || moradia.bairro || 'Santa Teresa' %></div>
+                        <div class="detail-location">📍 <%= formatLocalidade(moradia.localizacao || moradia.bairro) || 'Santa Teresa' %></div>
                     </div>
                     <div class="price-tag">R$ <%= Number(moradia.preco).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) %></div>
                 </div>

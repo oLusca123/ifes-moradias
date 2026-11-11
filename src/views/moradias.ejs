@@ -92,8 +92,7 @@
 
                 <div class="city-strip">
                     <a class="city-pill city-pill-all" href="/moradias" aria-current="<%= busca ? 'false' : 'true' %>">Ver todas as regiões</a>
-                    <a class="city-pill" href="/moradias?busca=<%= encodeURIComponent('Barracão') %>">🏘️ Barracão</a>
-                    <a class="city-pill" href="/moradias?busca=<%= encodeURIComponent('São João de Petrópolis') %>">🌿 São João de Petrópolis</a>
+                    <a class="city-pill" href="/moradias?busca=<%= encodeURIComponent('São João de Petrópolis (Barracão)') %>">🌿 São João de Petrópolis (Barracão)</a>
                     <a class="city-pill" href="/moradias?busca=<%= encodeURIComponent('Santa Teresa') %>">🏡 Santa Teresa</a>
                     <a class="city-pill" href="/moradias?busca=<%= encodeURIComponent('Patrimônio') %>">📜 Patrimônio</a>
                     <a class="city-pill" href="/moradias?busca=<%= encodeURIComponent('São Roque') %>">⛰️ São Roque</a>
@@ -125,7 +124,7 @@
                                     <p class="price">R$ <%= Number(m.preco).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) %><span>/mês</span></p>
 
                                     <div class="meta">
-                                        <span>📍 <%= m.bairro || 'Santa Teresa' %></span>
+                                        <span>📍 <%= formatLocalidade(m.bairro) || 'Santa Teresa' %></span>
                                         <span>🏡 <%= m.tipo || 'Casa' %></span>
                                         <span>🛏️ <%= m.quartos || 1 %></span>
                                         <span>🚗 <%= m.vagas || 0 %> vaga(s)</span>
@@ -188,8 +187,7 @@
                 <div class="guide-region-filters" role="group" aria-label="Filtrar por região">
                     <button class="guide-region-tab active" type="button" data-region="todas" aria-pressed="true">Todas</button>
                     <button class="guide-region-tab" type="button" data-region="Santa Teresa" aria-pressed="false">Santa Teresa</button>
-                    <button class="guide-region-tab" type="button" data-region="Barracão" aria-pressed="false">Barracão</button>
-                    <button class="guide-region-tab" type="button" data-region="São João de Petrópolis" aria-pressed="false">São João de Petrópolis</button>
+                    <button class="guide-region-tab" type="button" data-region="São João de Petrópolis (Barracão)" aria-pressed="false">São João de Petrópolis (Barracão)</button>
                     <button class="guide-region-tab" type="button" data-region="Patrimônio" aria-pressed="false">Patrimônio</button>
                     <button class="guide-region-tab" type="button" data-region="São Roque" aria-pressed="false">São Roque</button>
                 </div>
@@ -207,12 +205,13 @@
 
             <div class="guide-grid">
                 <% informacoesUteis.forEach((item) => {
-                    const regiao = ['Santa Teresa', 'Barracão', 'São João de Petrópolis', 'Patrimônio', 'São Roque'].find((nome) => (item.localidade || '').includes(nome)) || 'Geral';
+                    const localidade = formatLocalidade(item.localidade);
+                    const regiao = ['Santa Teresa', 'São João de Petrópolis (Barracão)', 'Patrimônio', 'São Roque'].find((nome) => localidade.includes(nome)) || 'Geral';
                 %>
                     <article class="guide-card" data-category="<%= item.categoria %>" data-region="<%= regiao %>">
                         <div class="guide-card-top">
                             <span class="guide-card-icon"><%= item.icone %></span>
-                            <span class="guide-card-category"><%= item.localidade %></span>
+                            <span class="guide-card-category"><%= localidade %></span>
                         </div>
                         <h3><%= item.titulo %></h3>
                         <p><%= item.descricao %></p>
@@ -229,7 +228,7 @@
                 </div>
             </div>
 
-            <p class="guide-disclaimer">Os links de mapas e buscas ajudam a encontrar estabelecimentos e horários atualizados, mas as informações podem mudar. Confirme diretamente com o local ou empresa. Barracão é também conhecido como São João de Petrópolis; os nomes acima incluem bairros, distritos e localidades, não apenas municípios.</p>
+            <p class="guide-disclaimer">Os links de mapas e buscas ajudam a encontrar estabelecimentos e horários atualizados, mas as informações podem mudar. Confirme diretamente com o local ou empresa. São João de Petrópolis (Barracão) é tratado aqui como uma única localidade.</p>
         </section>
     </div>
     <script>

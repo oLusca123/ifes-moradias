@@ -17,6 +17,12 @@ process.env.ASAAS_WEBHOOK_TOKEN = 'webhook-token';
 process.env.RENDER_GIT_BRANCH = 'staging-asaas';
 
 const { getPaymentStatus, canTransitionPaymentStatus } = require('../dist/services/AsaasPaymentState.js');
+const {
+  formatLocalidade,
+  getSaoJoaoSearchPatterns,
+  isSaoJoaoDePetropolis,
+  SAO_JOAO_DE_PETROPOLIS
+} = require('../dist/services/Localidade.js');
 const { asaasRequest, AsaasApiError } = require('../dist/services/AsaasService.js');
 const {
   isStagingDemoRentalsEnabled,
@@ -164,8 +170,8 @@ test('local guide region filters keep general emergency, campus, and transport c
   };
   const regionTabs = [
     makeTab({ region: 'todas' }, true),
-    makeTab({ region: 'Barracão' }),
-    makeTab({ region: 'São João de Petrópolis' })
+    makeTab({ region: SAO_JOAO_DE_PETROPOLIS }),
+    makeTab({ region: 'Patrimônio' })
   ];
   const categoryTabs = [
     makeTab({ category: 'todos' }, true),
@@ -180,7 +186,7 @@ test('local guide region filters keep general emergency, campus, and transport c
     { dataset: { region: 'Geral', category: 'seguranca' }, hidden: false },
     { dataset: { region: 'Geral', category: 'campus' }, hidden: false },
     { dataset: { region: 'Geral', category: 'transporte' }, hidden: false },
-    { dataset: { region: 'São João de Petrópolis', category: 'comercio' }, hidden: false }
+    { dataset: { region: SAO_JOAO_DE_PETROPOLIS, category: 'comercio' }, hidden: false }
   ];
   const document = {
     querySelector(selector) {
@@ -206,6 +212,128 @@ test('local guide region filters keep general emergency, campus, and transport c
   regionTabs[2].listeners.click();
   categoryTabs[3].listeners.click();
   assert.equal(cards.find((card) => card.dataset.category === 'transporte').hidden, false);
+});
+
+test('Barracão, SJP, and São João de Petrópolis normalize to one region', () => {
+  for (const legacyValue of [
+    'Barracão',
+    'Barracao',
+    'SJP',
+    'São João de Petrópolis',
+    'Sao Joao de Petropolis',
+    'sjp',
+    'Região de Barracão',
+    'Rua central, São João de Petrópolis, Barracão',
+    'Barracão (São João de Petrópolis)',
+    'São João de Petrópolis (Barracão), Patrimônio'
+  ]) {
+    assert.equal(isSaoJoaoDePetropolis(legacyValue), true, legacyValue);
+    assert.equal(
+      formatLocalidade(legacyValue),
+      legacyValue.startsWith('Rua central,')
+        ? `Rua central, ${SAO_JOAO_DE_PETROPOLIS}`
+        : legacyValue.endsWith(', Patrimônio')
+          ? `${SAO_JOAO_DE_PETROPOLIS}, Patrimônio`
+          : (
+        legacyValue.startsWith('Região de ')
+          ? `Região de ${SAO_JOAO_DE_PETROPOLIS}`
+          : SAO_JOAO_DE_PETROPOLIS
+      ),
+      legacyValue
+    );
+  }
+  assert.equal(isSaoJoaoDePetropolis('Patrimônio'), false);
+  assert.equal(formatLocalidade('Patrimônio'), 'Patrimônio');
+  assert.ok(getSaoJoaoSearchPatterns().some((pattern) => pattern.includes('barracão')));
+  assert.ok(getSaoJoaoSearchPatterns().some((pattern) => pattern.includes('sjp')));
+});
+
+test('property listings search legacy locality values from every supported alias', async () => {
+  const repo = BancoDeDados.getRepository(Moradia);
+  const barracao = await repo.save({
+    titulo: 'Anúncio legado Barracão', preco: 300, imagem: '/barracao.jpg',
+    bairro: 'Barracão', localizacao: 'Região de Barracão', demonstracao: false, disponivel: true
+  });
+  const sjp = await repo.save({
+    titulo: 'Anúncio legado SJP', preco: 400, imagem: '/sjp.jpg',
+    bairro: 'SJP', localizacao: 'São João de Petrópolis', demonstracao: false, disponivel: true
+  });
+  await repo.save({
+    titulo: 'Anúncio de outra região', preco: 500, imagem: '/outra.jpg',
+    bairro: 'Patrimônio', localizacao: 'Patrimônio', demonstracao: false, disponivel: true
+  });
+
+  for (const busca of ['Barracão', 'SJP', 'São João de Petrópolis', SAO_JOAO_DE_PETROPOLIS]) {
+    const response = {
+      statusCode: 200,
+      status(code) { this.statusCode = code; return this; },
+      render(view, data) { this.view = view; this.data = data; return this; },
+      send(message) { this.message = message; return this; }
+    };
+    await MoradiaController.list({ query: { busca }, session: {} }, response);
+    assert.equal(response.statusCode, 200, busca);
+    assert.deepEqual(
+      response.data.moradias.filter((item) => [barracao.id, sjp.id].includes(item.id)).map((item) => item.id).sort(),
+      [barracao.id, sjp.id].sort(),
+      `legacy homes should match ${busca}`
+    );
+    assert.equal(response.data.moradias.some((item) => item.bairro === 'Patrimônio'), false);
+  }
+});
+
+test('region filters and listing form expose the canonical locality only once', () => {
+  const listingTemplate = fs.readFileSync(path.join(__dirname, '..', 'src', 'views', 'moradias.ejs'), 'utf8');
+  const formTemplate = fs.readFileSync(path.join(__dirname, '..', 'src', 'views', 'moradia_novo.ejs'), 'utf8');
+  const regionFilterMarkup = listingTemplate.slice(
+    listingTemplate.indexOf('<div class="guide-region-filters"'),
+    listingTemplate.indexOf('</div>', listingTemplate.indexOf('<div class="guide-region-filters"'))
+  );
+  assert.equal((regionFilterMarkup.match(/data-region="São João de Petrópolis \(Barracão\)"/g) || []).length, 1);
+  assert.equal((regionFilterMarkup.match(/data-region="Barracão"/g) || []).length, 0);
+  assert.equal((regionFilterMarkup.match(/data-region="São João de Petrópolis"/g) || []).length, 0);
+
+  const formHtml = ejs.render(formTemplate, {
+    form: { bairro: 'Barracão' },
+    formatLocalidade,
+    erro: null,
+    asaasConfigurado: true,
+    usuario: null
+  });
+  assert.equal((formHtml.match(/value="São João de Petrópolis \(Barracão\)"/g) || []).length, 1);
+  assert.equal((formHtml.match(/value="Barracão"/g) || []).length, 0);
+  assert.equal((formHtml.match(/value="São João de Petrópolis"/g) || []).length, 0);
+  assert.match(formHtml, /value="São João de Petrópolis \(Barracão\)" selected/);
+});
+
+test('legacy locality values render canonically on listing and detail pages', async () => {
+  const moradia = await BancoDeDados.getRepository(Moradia).save({
+    titulo: 'Moradia com bairro legado', preco: 350, imagem: '/legacy.jpg',
+    bairro: 'Barracão', localizacao: 'Rua principal, Barracão, São João de Petrópolis',
+    demonstracao: false, disponivel: true
+  });
+  const renderResponse = () => ({
+    statusCode: 200,
+    status(code) { this.statusCode = code; return this; },
+    render(view, data) {
+      this.view = view;
+      this.data = data;
+      this.html = ejs.render(
+        fs.readFileSync(path.join(__dirname, '..', 'src', 'views', `${view}.ejs`), 'utf8'),
+        data
+      );
+      return this;
+    },
+    send(message) { this.message = message; return this; }
+  });
+
+  const listResponse = renderResponse();
+  await MoradiaController.list({ query: { busca: 'Barracão' }, session: {} }, listResponse);
+  assert.match(listResponse.html, new RegExp(SAO_JOAO_DE_PETROPOLIS.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  assert.equal(listResponse.html.includes('📍 Barracão</span>'), false);
+
+  const detailsResponse = renderResponse();
+  await MoradiaController.show({ params: { id: String(moradia.id) }, session: {} }, detailsResponse);
+  assert.match(detailsResponse.html, /Rua principal, São João de Petrópolis \(Barracão\)/);
 });
 
 test('staging demo rentals require the sandbox, branch, and explicit flag', () => {

@@ -2,6 +2,13 @@ import { Request, Response } from 'express';
 import { BancoDeDados } from '../services/BDConn';
 import { Moradia } from '../models/Moradia';
 import { findStagingDemoOwner } from '../services/AsaasSandboxDemoRentals';
+import { Brackets } from 'typeorm';
+import {
+    formatLocalidade,
+    getSaoJoaoSearchPatterns,
+    isSaoJoaoDePetropolis,
+    SAO_JOAO_DE_PETROPOLIS
+} from '../services/Localidade';
 
 export class MoradiaController {
 
@@ -36,13 +43,13 @@ export class MoradiaController {
                 titulo: "Quarto mobiliado para estudante",
                 preco: 380,
                 distancia: "Acesso pela região do campus",
-                bairro: "São João de Petrópolis",
+                bairro: SAO_JOAO_DE_PETROPOLIS,
                 tipo: "Quarto",
                 quartos: 1,
                 banheiros: 1,
                 vagas: 0,
                 telefone: "",
-                localizacao: "São João de Petrópolis, próximo ao comércio local",
+                localizacao: `${SAO_JOAO_DE_PETROPOLIS}, próximo ao comércio local`,
                 descricao: "Exemplo ilustrativo de quarto simples em casa compartilhada. Inclui cama, guarda-roupa e uso compartilhado da cozinha e do banheiro. Combine contas e regras da casa diretamente com o proprietário.",
                 imagem: "https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=900&q=80",
                 comodidades: JSON.stringify(["mobilia", "cozinha"]),
@@ -54,13 +61,13 @@ export class MoradiaController {
                 titulo: "Vaga em quarto compartilhado",
                 preco: 300,
                 distancia: "Trajeto a confirmar",
-                bairro: "Barracão",
+                bairro: SAO_JOAO_DE_PETROPOLIS,
                 tipo: "Quarto",
                 quartos: 1,
                 banheiros: 1,
                 vagas: 0,
                 telefone: "",
-                localizacao: "Região de Barracão",
+                localizacao: `Região de ${SAO_JOAO_DE_PETROPOLIS}`,
                 descricao: "Exemplo ilustrativo de vaga em quarto compartilhado para quem busca dividir despesas. O valor de demonstração não inclui contas; confirme disponibilidade, regras, mobiliário e transporte antes de fechar qualquer contrato.",
                 imagem: "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=900&q=80",
                 comodidades: JSON.stringify(["cozinha"]),
@@ -72,13 +79,13 @@ export class MoradiaController {
                 titulo: "Quarto individual com cozinha compartilhada",
                 preco: 450,
                 distancia: "A combinar",
-                bairro: "São João de Petrópolis",
+                bairro: SAO_JOAO_DE_PETROPOLIS,
                 tipo: "Quarto",
                 quartos: 1,
                 banheiros: 1,
                 vagas: 0,
                 telefone: "",
-                localizacao: "São João de Petrópolis",
+                localizacao: SAO_JOAO_DE_PETROPOLIS,
                 descricao: "Exemplo de quarto individual em residência compartilhada, pensado para a rotina de quem estuda. Cozinha e lavanderia de uso comum. Converse sobre contas, horários e uso dos espaços.",
                 imagem: "https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?auto=format&fit=crop&w=900&q=80",
                 comodidades: JSON.stringify(["lavanderia", "cozinha"]),
@@ -144,13 +151,13 @@ export class MoradiaController {
                 titulo: "Kitnet básica para uma pessoa",
                 preco: 580,
                 distancia: "A combinar",
-                bairro: "Barracão",
+                bairro: SAO_JOAO_DE_PETROPOLIS,
                 tipo: "Kitnet",
                 quartos: 1,
                 banheiros: 1,
                 vagas: 0,
                 telefone: "",
-                localizacao: "Barracão, São João de Petrópolis",
+                localizacao: SAO_JOAO_DE_PETROPOLIS,
                 descricao: "Exemplo ilustrativo de kitnet compacta com quarto e cozinha no mesmo ambiente. Boa para uma pessoa que prefere ter seu próprio espaço. Verifique abastecimento de água, internet e transporte.",
                 imagem: "https://images.unsplash.com/photo-1494526585095-c41746248156?auto=format&fit=crop&w=900&q=80",
                 comodidades: JSON.stringify(["cozinha"]),
@@ -180,13 +187,13 @@ export class MoradiaController {
                 titulo: "Casa pequena para compartilhar",
                 preco: 760,
                 distancia: "Confirmar trajeto ao campus",
-                bairro: "São João de Petrópolis",
+                bairro: SAO_JOAO_DE_PETROPOLIS,
                 tipo: "Casa",
                 quartos: 2,
                 banheiros: 1,
                 vagas: 0,
                 telefone: "",
-                localizacao: "São João de Petrópolis",
+                localizacao: SAO_JOAO_DE_PETROPOLIS,
                 descricao: "Exemplo ilustrativo de casa simples com dois quartos, destinada a pessoas que queiram dividir o aluguel. Combine a divisão do valor, das contas e das tarefas domésticas.",
                 imagem: "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=900&q=80",
                 comodidades: JSON.stringify(["cozinha", "quintal"]),
@@ -216,7 +223,7 @@ export class MoradiaController {
 
         const campus = 'IFES Campus Santa Teresa, Espírito Santo';
         const regions = [
-            'Barracão (São João de Petrópolis), Santa Teresa, ES',
+            `${SAO_JOAO_DE_PETROPOLIS}, Santa Teresa, ES`,
             'Santa Teresa, ES',
             'Patrimônio, Santa Teresa, ES',
             'São Roque, Santa Teresa, ES'
@@ -230,7 +237,7 @@ export class MoradiaController {
                 localidade: 'Santa Teresa e distritos',
                 descricao: 'Consulte as informações mais recentes e confirme o horário com a viação antes de viajar. Os horários podem mudar.',
                 acao: 'Pesquisar horários',
-                link: `https://www.google.com/search?q=${encodeURIComponent('horários ônibus Santa Teresa ES São João de Petrópolis')}`
+                link: `https://www.google.com/search?q=${encodeURIComponent(`horários ônibus Santa Teresa ES ${SAO_JOAO_DE_PETROPOLIS}`)}`
             },
             ...regions.map((region) => ({
                 categoria: 'transporte',
@@ -290,8 +297,8 @@ export class MoradiaController {
                 categoria: 'dicas',
                 icone: '📍',
                 titulo: 'Comércio e serviços por região',
-                localidade: 'Barracão, São João de Petrópolis, Patrimônio e São Roque',
-                descricao: 'Esses nomes identificam localidades da região; Barracão também é conhecido como São João de Petrópolis. Confira no mapa qual ponto fica mais perto do endereço do imóvel.',
+                localidade: `${SAO_JOAO_DE_PETROPOLIS}, Patrimônio e São Roque`,
+                descricao: 'Confira no mapa qual ponto fica mais perto do endereço do imóvel.',
                 acao: 'Explorar localidades',
                 link: mapsSearch('comércios e serviços perto de IFES Campus Santa Teresa, Espírito Santo')
             }
@@ -309,12 +316,26 @@ export class MoradiaController {
 
             if (busca) {
                 const termo = `%${busca.toLowerCase()}%`;
-                moradias = await repo
-                    .createQueryBuilder('moradia')
-                    .where('LOWER(moradia.titulo) LIKE :termo', { termo })
-                    .orWhere('LOWER(moradia.bairro) LIKE :termo', { termo })
-                    .orWhere('LOWER(moradia.tipo) LIKE :termo', { termo })
-                    .orWhere('LOWER(moradia.distancia) LIKE :termo', { termo })
+                const query = repo.createQueryBuilder('moradia').where(new Brackets((conditions) => {
+                    conditions
+                        .where('LOWER(moradia.titulo) LIKE :termo', { termo })
+                        .orWhere('LOWER(moradia.bairro) LIKE :termo', { termo })
+                        .orWhere('LOWER(moradia.tipo) LIKE :termo', { termo })
+                        .orWhere('LOWER(moradia.distancia) LIKE :termo', { termo });
+
+                    if (isSaoJoaoDePetropolis(busca)) {
+                        getSaoJoaoSearchPatterns().forEach((pattern, index) => {
+                            conditions
+                                .orWhere(`LOWER(moradia.bairro) LIKE :localidade${index}`, {
+                                    [`localidade${index}`]: pattern
+                                })
+                                .orWhere(`LOWER(moradia.localizacao) LIKE :localidadeEndereco${index}`, {
+                                    [`localidadeEndereco${index}`]: pattern
+                                });
+                        });
+                    }
+                }));
+                moradias = await query
                     .orderBy('moradia.destaque', 'DESC')
                     .addOrderBy('moradia.id', 'DESC')
                     .getMany();
@@ -330,6 +351,7 @@ export class MoradiaController {
             return res.render('moradias', {
                 moradias,
                 busca,
+                formatLocalidade,
                 informacoesUteis: MoradiaController.getInformacoesUteis(),
                 usuario: req.session && (req.session as any).usuarioNome ? {
                     nome: (req.session as any).usuarioNome,
@@ -360,6 +382,7 @@ export class MoradiaController {
                 : null;
             return res.render('moradia_detalhes', {
                 moradia,
+                formatLocalidade,
                 comodidades: JSON.parse(moradia.comodidades || '[]') as string[],
                 stagingDemoRentalAvailable: Boolean(demoOwner && demoOwner.id !== usuarioId),
                 usuario: req.session && (req.session as any).usuarioNome ? {
@@ -379,6 +402,7 @@ export class MoradiaController {
         return res.render('moradia_novo', {
             erro: null,
             form: {},
+            formatLocalidade,
             asaasConfigurado: Boolean(process.env.ASAAS_API_KEY),
             usuario: req.session && (req.session as any).usuarioNome ? {
                 nome: (req.session as any).usuarioNome,
@@ -412,8 +436,8 @@ export class MoradiaController {
             const numeroVagas = Number(vagas);
             const texto = (value: unknown) => typeof value === "string" ? value.trim() : "";
             const tituloLimpo = texto(titulo);
-            const bairroLimpo = texto(bairro);
-            const localizacaoLimpa = texto(localizacao);
+            const bairroLimpo = formatLocalidade(texto(bairro));
+            const localizacaoLimpa = formatLocalidade(texto(localizacao));
             const telefoneLimpo = texto(telefone);
             const descricaoLimpa = texto(descricao);
             const tipoLimpo = texto(tipo);
@@ -462,6 +486,7 @@ export class MoradiaController {
                             ? 'O arquivo enviado não parece ser uma imagem JPG, PNG ou WebP válida.'
                             : 'Confira os dados preenchidos e tente novamente.',
                     form: req.body || {},
+                    formatLocalidade,
                     usuario: req.session && (req.session as any).usuarioNome ? {
                         nome: (req.session as any).usuarioNome,
                         tipo: (req.session as any).usuarioTipo,
