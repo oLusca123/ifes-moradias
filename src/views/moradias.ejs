@@ -92,7 +92,7 @@
 
                 <div class="city-strip">
                     <a class="city-pill city-pill-all" href="/moradias" aria-current="<%= busca ? 'false' : 'true' %>">Ver todas as regiões</a>
-                    <a class="city-pill" href="/moradias?busca=<%= encodeURIComponent('São João de Petrópolis (Barracão)') %>">🌿 São João de Petrópolis (Barracão)</a>
+                    <a class="city-pill" href="/moradias?busca=<%= encodeURIComponent('Barracão') %>">🏘️ Barracão</a>
                     <a class="city-pill" href="/moradias?busca=<%= encodeURIComponent('Santa Teresa') %>">🏡 Santa Teresa</a>
                     <a class="city-pill" href="/moradias?busca=<%= encodeURIComponent('Patrimônio') %>">📜 Patrimônio</a>
                     <a class="city-pill" href="/moradias?busca=<%= encodeURIComponent('São Roque') %>">⛰️ São Roque</a>
@@ -187,7 +187,7 @@
                 <div class="guide-region-filters" role="group" aria-label="Filtrar por região">
                     <button class="guide-region-tab active" type="button" data-region="todas" aria-pressed="true">Todas</button>
                     <button class="guide-region-tab" type="button" data-region="Santa Teresa" aria-pressed="false">Santa Teresa</button>
-                    <button class="guide-region-tab" type="button" data-region="São João de Petrópolis (Barracão)" aria-pressed="false">São João de Petrópolis (Barracão)</button>
+                    <button class="guide-region-tab" type="button" data-region="Barracão" aria-pressed="false">Barracão</button>
                     <button class="guide-region-tab" type="button" data-region="Patrimônio" aria-pressed="false">Patrimônio</button>
                     <button class="guide-region-tab" type="button" data-region="São Roque" aria-pressed="false">São Roque</button>
                 </div>
@@ -206,7 +206,7 @@
             <div class="guide-grid">
                 <% informacoesUteis.forEach((item) => {
                     const localidade = formatLocalidade(item.localidade);
-                    const regiao = ['Santa Teresa', 'São João de Petrópolis (Barracão)', 'Patrimônio', 'São Roque'].find((nome) => localidade.includes(nome)) || 'Geral';
+                    const regiao = ['Santa Teresa', 'Barracão', 'Patrimônio', 'São Roque'].find((nome) => localidade.includes(nome)) || 'Geral';
                 %>
                     <article class="guide-card" data-category="<%= item.categoria %>" data-region="<%= regiao %>">
                         <div class="guide-card-top">
@@ -228,7 +228,7 @@
                 </div>
             </div>
 
-            <p class="guide-disclaimer">Os links de mapas e buscas ajudam a encontrar estabelecimentos e horários atualizados, mas as informações podem mudar. Confirme diretamente com o local ou empresa. São João de Petrópolis (Barracão) é tratado aqui como uma única localidade.</p>
+            <p class="guide-disclaimer">Os links de mapas e buscas ajudam a encontrar estabelecimentos e horários atualizados, mas as informações podem mudar. Confirme diretamente com o local ou empresa.</p>
         </section>
     </div>
     <script>

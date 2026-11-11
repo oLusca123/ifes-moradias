@@ -18,10 +18,10 @@ process.env.RENDER_GIT_BRANCH = 'staging-asaas';
 
 const { getPaymentStatus, canTransitionPaymentStatus } = require('../dist/services/AsaasPaymentState.js');
 const {
+  BARRACAO,
   formatLocalidade,
-  getSaoJoaoSearchPatterns,
-  isSaoJoaoDePetropolis,
-  SAO_JOAO_DE_PETROPOLIS
+  getBarracaoSearchPatterns,
+  isBarracao
 } = require('../dist/services/Localidade.js');
 const { asaasRequest, AsaasApiError } = require('../dist/services/AsaasService.js');
 const {
@@ -170,7 +170,7 @@ test('local guide region filters keep general emergency, campus, and transport c
   };
   const regionTabs = [
     makeTab({ region: 'todas' }, true),
-    makeTab({ region: SAO_JOAO_DE_PETROPOLIS }),
+    makeTab({ region: BARRACAO }),
     makeTab({ region: 'Patrimônio' })
   ];
   const categoryTabs = [
@@ -186,7 +186,7 @@ test('local guide region filters keep general emergency, campus, and transport c
     { dataset: { region: 'Geral', category: 'seguranca' }, hidden: false },
     { dataset: { region: 'Geral', category: 'campus' }, hidden: false },
     { dataset: { region: 'Geral', category: 'transporte' }, hidden: false },
-    { dataset: { region: SAO_JOAO_DE_PETROPOLIS, category: 'comercio' }, hidden: false }
+    { dataset: { region: BARRACAO, category: 'comercio' }, hidden: false }
   ];
   const document = {
     querySelector(selector) {
@@ -214,7 +214,7 @@ test('local guide region filters keep general emergency, campus, and transport c
   assert.equal(cards.find((card) => card.dataset.category === 'transporte').hidden, false);
 });
 
-test('Barracão, SJP, and São João de Petrópolis normalize to one region', () => {
+test('Barracão is canonical and legacy SJP names normalize to it', () => {
   for (const legacyValue of [
     'Barracão',
     'Barracao',
@@ -227,25 +227,19 @@ test('Barracão, SJP, and São João de Petrópolis normalize to one region', ()
     'Barracão (São João de Petrópolis)',
     'São João de Petrópolis (Barracão), Patrimônio'
   ]) {
-    assert.equal(isSaoJoaoDePetropolis(legacyValue), true, legacyValue);
-    assert.equal(
-      formatLocalidade(legacyValue),
-      legacyValue.startsWith('Rua central,')
-        ? `Rua central, ${SAO_JOAO_DE_PETROPOLIS}`
-        : legacyValue.endsWith(', Patrimônio')
-          ? `${SAO_JOAO_DE_PETROPOLIS}, Patrimônio`
-          : (
-        legacyValue.startsWith('Região de ')
-          ? `Região de ${SAO_JOAO_DE_PETROPOLIS}`
-          : SAO_JOAO_DE_PETROPOLIS
-      ),
-      legacyValue
-    );
+    assert.equal(isBarracao(legacyValue), true, legacyValue);
   }
-  assert.equal(isSaoJoaoDePetropolis('Patrimônio'), false);
+  assert.equal(formatLocalidade('Barracão'), BARRACAO);
+  assert.equal(formatLocalidade('São João de Petrópolis'), BARRACAO);
+  assert.equal(formatLocalidade('SJP'), BARRACAO);
+  assert.equal(formatLocalidade('Região de Barracão'), `Região de ${BARRACAO}`);
+  assert.equal(formatLocalidade('Rua central, São João de Petrópolis, Barracão'), `Rua central, ${BARRACAO}`);
+  assert.equal(formatLocalidade('Barracão (São João de Petrópolis)'), BARRACAO);
+  assert.equal(formatLocalidade('São João de Petrópolis (Barracão), Patrimônio'), `${BARRACAO}, Patrimônio`);
+  assert.equal(isBarracao('Patrimônio'), false);
   assert.equal(formatLocalidade('Patrimônio'), 'Patrimônio');
-  assert.ok(getSaoJoaoSearchPatterns().some((pattern) => pattern.includes('barracão')));
-  assert.ok(getSaoJoaoSearchPatterns().some((pattern) => pattern.includes('sjp')));
+  assert.ok(getBarracaoSearchPatterns().some((pattern) => pattern.includes('barracão')));
+  assert.ok(getBarracaoSearchPatterns().some((pattern) => pattern.includes('sjp')));
 });
 
 test('property listings search legacy locality values from every supported alias', async () => {
@@ -258,12 +252,20 @@ test('property listings search legacy locality values from every supported alias
     titulo: 'Anúncio legado SJP', preco: 400, imagem: '/sjp.jpg',
     bairro: 'SJP', localizacao: 'São João de Petrópolis', demonstracao: false, disponivel: true
   });
-  await repo.save({
+  const patrimonio = await repo.save({
     titulo: 'Anúncio de outra região', preco: 500, imagem: '/outra.jpg',
     bairro: 'Patrimônio', localizacao: 'Patrimônio', demonstracao: false, disponivel: true
   });
+  const santaTeresa = await repo.save({
+    titulo: 'Anúncio em Santa Teresa', preco: 600, imagem: '/santa-teresa.jpg',
+    bairro: 'Santa Teresa', localizacao: 'Santa Teresa', demonstracao: false, disponivel: true
+  });
+  const saoRoque = await repo.save({
+    titulo: 'Anúncio em São Roque', preco: 700, imagem: '/sao-roque.jpg',
+    bairro: 'São Roque', localizacao: 'São Roque', demonstracao: false, disponivel: true
+  });
 
-  for (const busca of ['Barracão', 'SJP', 'São João de Petrópolis', SAO_JOAO_DE_PETROPOLIS]) {
+  for (const busca of ['Barracão', 'SJP', 'São João de Petrópolis', 'São João de Petrópolis (Barracão)']) {
     const response = {
       statusCode: 200,
       status(code) { this.statusCode = code; return this; },
@@ -272,43 +274,72 @@ test('property listings search legacy locality values from every supported alias
     };
     await MoradiaController.list({ query: { busca }, session: {} }, response);
     assert.equal(response.statusCode, 200, busca);
+    const matchedTestHomes = response.data.moradias.filter((item) => [barracao.id, sjp.id].includes(item.id));
     assert.deepEqual(
-      response.data.moradias.filter((item) => [barracao.id, sjp.id].includes(item.id)).map((item) => item.id).sort(),
+      matchedTestHomes.map((item) => item.id).sort(),
       [barracao.id, sjp.id].sort(),
       `legacy homes should match ${busca}`
     );
+    assert.equal(matchedTestHomes.length, 2, `no duplicate or missing homes for ${busca}`);
     assert.equal(response.data.moradias.some((item) => item.bairro === 'Patrimônio'), false);
+  }
+
+  for (const [region, expectedId] of [
+    ['Patrimônio', patrimonio.id],
+    ['Santa Teresa', santaTeresa.id],
+    ['São Roque', saoRoque.id]
+  ]) {
+    const response = {
+      statusCode: 200,
+      status(code) { this.statusCode = code; return this; },
+      render(view, data) { this.view = view; this.data = data; return this; },
+      send(message) { this.message = message; return this; }
+    };
+    await MoradiaController.list({ query: { busca: region }, session: {} }, response);
+    assert.equal(response.data.moradias.some((item) => item.id === expectedId), true);
+    assert.equal(response.data.moradias.some((item) => [barracao.id, sjp.id].includes(item.id)), false);
   }
 });
 
-test('region filters and listing form expose the canonical locality only once', () => {
+test('region filters and listing form expose exactly four regions and normalize old values', () => {
   const listingTemplate = fs.readFileSync(path.join(__dirname, '..', 'src', 'views', 'moradias.ejs'), 'utf8');
   const formTemplate = fs.readFileSync(path.join(__dirname, '..', 'src', 'views', 'moradia_novo.ejs'), 'utf8');
   const regionFilterMarkup = listingTemplate.slice(
     listingTemplate.indexOf('<div class="guide-region-filters"'),
     listingTemplate.indexOf('</div>', listingTemplate.indexOf('<div class="guide-region-filters"'))
   );
-  assert.equal((regionFilterMarkup.match(/data-region="São João de Petrópolis \(Barracão\)"/g) || []).length, 1);
-  assert.equal((regionFilterMarkup.match(/data-region="Barracão"/g) || []).length, 0);
-  assert.equal((regionFilterMarkup.match(/data-region="São João de Petrópolis"/g) || []).length, 0);
+  assert.deepEqual(
+    [...regionFilterMarkup.matchAll(/data-region="([^"]+)"/g)].map((match) => match[1]),
+    ['todas', 'Santa Teresa', 'Barracão', 'Patrimônio', 'São Roque']
+  );
+  const cityStripMarkup = listingTemplate.slice(
+    listingTemplate.indexOf('<div class="city-strip">'),
+    listingTemplate.indexOf('</div>', listingTemplate.indexOf('<div class="city-strip">'))
+  );
+  assert.deepEqual(
+    [...cityStripMarkup.matchAll(/class="city-pill(?: [^"]*)?"[^>]*>([^<]*)/g)].map((match) => match[1].replace(/^[^\p{L}]*/u, '').trim()),
+    ['Ver todas as regiões', 'Barracão', 'Santa Teresa', 'Patrimônio', 'São Roque']
+  );
 
   const formHtml = ejs.render(formTemplate, {
-    form: { bairro: 'Barracão' },
+    form: { bairro: 'São João de Petrópolis' },
     formatLocalidade,
     erro: null,
     asaasConfigurado: true,
     usuario: null
   });
-  assert.equal((formHtml.match(/value="São João de Petrópolis \(Barracão\)"/g) || []).length, 1);
-  assert.equal((formHtml.match(/value="Barracão"/g) || []).length, 0);
+  assert.equal((formHtml.match(/value="Barracão"/g) || []).length, 1);
   assert.equal((formHtml.match(/value="São João de Petrópolis"/g) || []).length, 0);
-  assert.match(formHtml, /value="São João de Petrópolis \(Barracão\)" selected/);
+  assert.match(formHtml, /value="Barracão" selected/);
+  assert.equal((formHtml.match(/value="Santa Teresa"/g) || []).length, 1);
+  assert.equal((formHtml.match(/value="Patrimônio"/g) || []).length, 1);
+  assert.equal((formHtml.match(/value="São Roque"/g) || []).length, 1);
 });
 
 test('legacy locality values render canonically on listing and detail pages', async () => {
   const moradia = await BancoDeDados.getRepository(Moradia).save({
     titulo: 'Moradia com bairro legado', preco: 350, imagem: '/legacy.jpg',
-    bairro: 'Barracão', localizacao: 'Rua principal, Barracão, São João de Petrópolis',
+    bairro: 'São João de Petrópolis', localizacao: 'Rua principal, Barracão, São João de Petrópolis',
     demonstracao: false, disponivel: true
   });
   const renderResponse = () => ({
@@ -328,12 +359,13 @@ test('legacy locality values render canonically on listing and detail pages', as
 
   const listResponse = renderResponse();
   await MoradiaController.list({ query: { busca: 'Barracão' }, session: {} }, listResponse);
-  assert.match(listResponse.html, new RegExp(SAO_JOAO_DE_PETROPOLIS.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
-  assert.equal(listResponse.html.includes('📍 Barracão</span>'), false);
+  assert.match(listResponse.html, /📍 Barracão<\/span>/);
+  assert.equal(listResponse.html.includes('São João de Petrópolis'), false);
 
   const detailsResponse = renderResponse();
   await MoradiaController.show({ params: { id: String(moradia.id) }, session: {} }, detailsResponse);
-  assert.match(detailsResponse.html, /Rua principal, São João de Petrópolis \(Barracão\)/);
+  assert.match(detailsResponse.html, /Rua principal, Barracão/);
+  assert.equal(detailsResponse.html.includes('São João de Petrópolis'), false);
 });
 
 test('staging demo rentals require the sandbox, branch, and explicit flag', () => {

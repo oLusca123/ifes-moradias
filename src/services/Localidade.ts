@@ -1,43 +1,26 @@
-export const SAO_JOAO_DE_PETROPOLIS = "São João de Petrópolis (Barracão)";
+export const BARRACAO = "Barracão";
 
-const saoJoaoAliases = [
-    "Barracão",
-    "Barracao",
-    "São João de Petrópolis",
-    "Sao Joao de Petropolis",
-    "SJP"
-];
+const localityAlias = "(?:Barrac[aã]o|S[aã]o\\s+Jo[aã]o\\s+de\\s+Petr[oó]polis|S\\.?\\s*J\\.?\\s*P\\.?)";
+const legacyLocalityPattern = new RegExp(
+    `(?<![\\p{L}])(?:${localityAlias})(?![\\p{L}])`,
+    "iu"
+);
+const legacyLocalitySequencePattern = new RegExp(
+    `(?<![\\p{L}])(?:${localityAlias}\\s*\\(\\s*${localityAlias}\\s*\\)|${localityAlias}\\s*[,/]\\s*${localityAlias})(?![\\p{L}])`,
+    "giu"
+);
 
-const saoJoaoPattern = /(?<![\p{L}])(?:Barrac[aã]o\s*\(\s*S[aã]o\s+Jo[aã]o\s+de\s+Petr[oó]polis\s*\)|S[aã]o\s+Jo[aã]o\s+de\s+Petr[oó]polis\s*\(\s*Barrac[aã]o\s*\)|Barrac[aã]o\s*[,/]\s*S[aã]o\s+Jo[aã]o\s+de\s+Petr[oó]polis|S[aã]o\s+Jo[aã]o\s+de\s+Petr[oó]polis\s*[,/]\s*Barrac[aã]o|Barrac[aã]o|S[aã]o\s+Jo[aã]o\s+de\s+Petr[oó]polis|S\.?\s*J\.?\s*P\.?)(?![\p{L}])/iu;
-
-function normalizeText(value: string): string {
-    return value
-        .normalize("NFD")
-        .replace(/\p{Diacritic}/gu, "")
-        .toLowerCase()
-        .replace(/[().,]/g, " ")
-        .replace(/\s+/g, " ")
-        .trim();
-}
-
-export function isSaoJoaoDePetropolis(value: string): boolean {
-    return saoJoaoPattern.test(value);
+export function isBarracao(value: string): boolean {
+    return legacyLocalityPattern.test(value);
 }
 
 export function formatLocalidade(value: string | null | undefined): string {
     if (!value) return "";
-    const normalized = normalizeText(value);
-    if (normalized === normalizeText(SAO_JOAO_DE_PETROPOLIS)) {
-        return SAO_JOAO_DE_PETROPOLIS;
-    }
 
-    let replaced = false;
     return value
-        .replace(new RegExp(saoJoaoPattern.source, "giu"), () => {
-            if (replaced) return "";
-            replaced = true;
-            return SAO_JOAO_DE_PETROPOLIS;
-        })
+        .replace(legacyLocalitySequencePattern, BARRACAO)
+        .replace(new RegExp(legacyLocalityPattern.source, "giu"), BARRACAO)
+        .replace(/Barracão(?:\s*(?:,|\/|e)\s*Barracão)+/giu, BARRACAO)
         .replace(/\s*,\s*,+/g, ", ")
         .replace(/,\s*([,.;])/g, "$1")
         .replace(/\s{2,}/g, " ")
@@ -45,9 +28,17 @@ export function formatLocalidade(value: string | null | undefined): string {
         .trim();
 }
 
-export function getSaoJoaoSearchPatterns(): string[] {
+export function getBarracaoSearchPatterns(): string[] {
     return [
-        ...saoJoaoAliases,
-        SAO_JOAO_DE_PETROPOLIS
+        "Barracão",
+        "Barracao",
+        "São João de Petrópolis",
+        "Sao Joao de Petropolis",
+        "SJP",
+        "S.J.P.",
+        "Barracão (São João de Petrópolis)",
+        "São João de Petrópolis (Barracão)",
+        "Barracão, São João de Petrópolis",
+        "São João de Petrópolis, Barracão"
     ].map((alias) => `%${alias.toLowerCase()}%`);
 }
