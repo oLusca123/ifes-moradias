@@ -2,8 +2,10 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
+const vm = require('node:vm');
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const ejs = require('ejs');
 
 const dbPath = path.join(os.tmpdir(), `ifes-asaas-test-${randomUUID()}.sqlite`);
 process.env.NODE_ENV = 'test';
@@ -93,6 +95,117 @@ test('rental routes continue to require an authenticated session', () => {
   }, response, () => { continued = true; });
   assert.equal(continued, false);
   assert.match(response.location, /^\/login\?/);
+});
+
+test('local guide includes emergency, campus, and transport information', () => {
+  const information = MoradiaController.getInformacoesUteis();
+  const categories = new Set(information.map((item) => item.categoria));
+  assert.ok(categories.has('seguranca'));
+  assert.ok(categories.has('campus'));
+  assert.ok(categories.has('transporte'));
+  assert.ok(information.some((item) => item.titulo === 'Emergências'));
+  assert.ok(information.some((item) => item.titulo === 'Serviços e avisos do campus'));
+  assert.ok(information.some((item) => item.categoria === 'transporte'));
+});
+
+test('moradias listing route renders the local guide content', async () => {
+  const listingRoute = router.stack.find((layer) =>
+    layer.route && layer.route.path === '/moradias' && layer.route.methods.get);
+  assert.ok(listingRoute, 'moradias GET route must exist');
+
+  const response = {
+    statusCode: 200,
+    status(code) { this.statusCode = code; return this; },
+    render(view, data) {
+      this.view = view;
+      this.data = data;
+      this.html = ejs.render(
+        fs.readFileSync(path.join(__dirname, '..', 'src', 'views', `${view}.ejs`), 'utf8'),
+        data
+      );
+      return this;
+    },
+    send(message) { this.message = message; return this; }
+  };
+  await MoradiaController.list({ query: {}, session: {} }, response);
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.view, 'moradias');
+  const categories = new Set(response.data.informacoesUteis.map((item) => item.categoria));
+  assert.ok(categories.has('seguranca'));
+  assert.ok(categories.has('campus'));
+  assert.ok(categories.has('transporte'));
+  assert.match(response.html, /Emergências/);
+  assert.match(response.html, /Serviços e avisos do campus/);
+  assert.match(response.html, /Consultar horários de ônibus/);
+});
+
+test('local guide region filters keep general emergency, campus, and transport cards visible', () => {
+  const template = fs.readFileSync(path.join(__dirname, '..', 'src', 'views', 'moradias.ejs'), 'utf8');
+  const scriptStart = template.indexOf('        const regionTabs = document.querySelectorAll');
+  const scriptEnd = template.indexOf('    </script>', scriptStart);
+  assert.notEqual(scriptStart, -1);
+  assert.notEqual(scriptEnd, -1);
+
+  const makeTab = (dataset, active = false) => {
+    const listeners = {};
+    return {
+      dataset,
+      active,
+      listeners,
+      classList: {
+        toggle(name, force) {
+          if (name === 'active') this.owner.active = force;
+        },
+        owner: null
+      },
+      addEventListener(name, handler) { listeners[name] = handler; },
+      setAttribute() {}
+    };
+  };
+  const regionTabs = [
+    makeTab({ region: 'todas' }, true),
+    makeTab({ region: 'Barracão' }),
+    makeTab({ region: 'São João de Petrópolis' })
+  ];
+  const categoryTabs = [
+    makeTab({ category: 'todos' }, true),
+    makeTab({ category: 'seguranca' }),
+    makeTab({ category: 'campus' }),
+    makeTab({ category: 'transporte' })
+  ];
+  for (const tab of [...regionTabs, ...categoryTabs]) {
+    tab.classList.owner = tab;
+  }
+  const cards = [
+    { dataset: { region: 'Geral', category: 'seguranca' }, hidden: false },
+    { dataset: { region: 'Geral', category: 'campus' }, hidden: false },
+    { dataset: { region: 'Geral', category: 'transporte' }, hidden: false },
+    { dataset: { region: 'São João de Petrópolis', category: 'comercio' }, hidden: false }
+  ];
+  const document = {
+    querySelector(selector) {
+      const tabs = selector.startsWith('.guide-region-tab') ? regionTabs : categoryTabs;
+      return tabs.find((tab) => tab.active) || null;
+    },
+    querySelectorAll(selector) {
+      if (selector === '.guide-region-tab') return regionTabs;
+      if (selector === '.guide-tab') return categoryTabs;
+      if (selector === '.guide-card') return cards;
+      return [];
+    }
+  };
+
+  vm.runInNewContext(template.slice(scriptStart, scriptEnd), { document });
+  regionTabs[1].listeners.click();
+  for (const [index, category] of [[1, 'seguranca'], [2, 'campus'], [3, 'transporte']]) {
+    categoryTabs[index].listeners.click();
+    const globalCard = cards.find((card) => card.dataset.category === category);
+    assert.equal(globalCard.hidden, false, `${category} information should remain visible`);
+  }
+  assert.equal(cards[3].hidden, true, 'a card for another specific region should remain filtered');
+  regionTabs[2].listeners.click();
+  categoryTabs[3].listeners.click();
+  assert.equal(cards.find((card) => card.dataset.category === 'transporte').hidden, false);
 });
 
 test('staging demo rentals require the sandbox, branch, and explicit flag', () => {

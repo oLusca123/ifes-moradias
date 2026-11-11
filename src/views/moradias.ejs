@@ -306,7 +306,9 @@
             const activeCategory = document.querySelector('.guide-tab.active')?.dataset.category || 'todos';
 
             guideCards.forEach((card) => {
-                const matchesRegion = activeRegion === 'todas' || card.dataset.region === activeRegion;
+                const matchesRegion = activeRegion === 'todas'
+                    || card.dataset.region === activeRegion
+                    || card.dataset.region === 'Geral';
                 const matchesCategory = activeCategory === 'todos' || card.dataset.category === activeCategory;
                 card.hidden = !(matchesRegion && matchesCategory);
             });
